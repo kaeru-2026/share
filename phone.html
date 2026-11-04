@@ -123,6 +123,7 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
   <div class="mh">メニュー</div>
   <button data-p="pcs">💻 PC一覧・接続</button>
   <button data-p="me">📱 この端末の名前・アイコン</button>
+  <button data-p="usage">💾 使用容量</button>
   <button data-p="log">📝 ログ</button>
   <button data-p="help">❓ 使い方</button>
 </nav>
@@ -146,6 +147,13 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
     <input id="devName" class="inp">
     <button id="saveDev" class="btn">保存</button>
     <p class="sub" id="devInfo"></p>
+  </div>
+</section>
+<section class="panel" id="p-usage">
+  <div class="ph"><button class="back">←</button>使用容量</div>
+  <div class="card"><div id="usage"></div>
+    <button id="clrIn" class="btn" style="background:#fff;color:#222;border:1px solid #ccc">受信した画像・ファイルを削除</button>
+    <button id="clrAll" class="btn" style="background:#fff;color:#d32f2f;border:1px solid #e8b4b4">チャット履歴をすべて削除</button>
   </div>
 </section>
 <section class="panel" id="p-log">
@@ -310,20 +318,25 @@ function later(){clearTimeout(retry);retry=setTimeout(()=>{if(!document.hidden&&
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&curCode&&!(conn&&conn.open))connect()});
 
 function avFor(d){if(!d.fromId||d.fromId==='pc'){const pc=curPc()||{};return pc.avatar||''}const o=others.find(x=>x.id===d.fromId);return o?o.avatar||'':''}
+let seen=new Set(),lastPing=Date.now();const waiters={};
+function ackTo(mid){if(mid&&conn&&conn.open)sendMsg({type:'ack',mid}).catch(()=>{})}
 async function onData(d){
-  if(!d)return;const p=curPc();
+  if(!d)return;const p=curPc();lastPing=Date.now();
+  if(d.type==='ping'){sendMsg({type:'pong'}).catch(()=>{});return}
+  if(d.type==='pong')return;
+  if(d.type==='ack'){const w=waiters[d.mid];if(w){delete waiters[d.mid];w()}return}
   if(d.type==='denied'){conn.denied=true;return}
   if(d.type==='hello'){const was=conn.ok;conn.ok=true;$('#pinBox').hidden=true;if(p){if(!p.custom&&d.pcName)p.name=d.pcName;if(d.avatar!==undefined)p.avatar=d.avatar;savePcs()}st((p?p.name:'PC')+'と接続中','on');renderPcs();renderTarget();renderChat();if(!was)flushPending();return}
   if(d.type==='peers'){others=d.list||[];renderTarget();return}
   if(d.type==='status'){const m=(await all()).find(x=>x.mid===d.mid);if(m){m.notes=[...new Set([...(m.notes||[]),d.note])].slice(-4);await put(m);renderChat()}log(d.note);return}
-  if(d.type==='text'){await put({id:Date.now()+'_'+rid(4),ts:Date.now(),dir:'in',kind:'text',text:d.text,from:d.from||'PC',fromAv:avFor(d)});log('受信：テキスト（'+(d.from||'PC')+'）');renderChat(true);buzz();return}
+  if(d.type==='text'){if(d.mid&&seen.has(d.mid)){ackTo(d.mid);return}await put({mid:d.mid,id:Date.now()+'_'+rid(4),ts:Date.now(),dir:'in',kind:'text',text:d.text,from:d.from||'PC',fromAv:avFor(d)});seen.add(d.mid);ackTo(d.mid);log('受信：テキスト（'+(d.from||'PC')+'）');renderChat(true);buzz();return}
   if(d.type==='meta'){rx[d.fid]={m:d,parts:[],got:0};return}
   const r=rx[d.fid];if(!r)return;
   if(d.type==='chunk'){r.parts.push(d.data);r.got+=d.data.byteLength;if(r.m.size>512*1024)prog(d.fid,'受信 '+r.m.name,r.got/r.m.size)}
   else if(d.type==='end'){
-    delete rx[d.fid];const m=r.m,blob=new Blob(r.parts,{type:m.mime||'application/octet-stream'});
-    await put({id:Date.now()+'_'+rid(4),ts:Date.now(),dir:'in',kind:'file',blob,name:m.name||'file',mime:blob.type,size:blob.size,from:m.from||'PC',fromAv:avFor(m),bid:m.bid||null});
-    log('受信：'+m.name+'（'+kb(blob.size)+'・'+(m.from||'PC')+'）');renderChat(true);buzz();
+    delete rx[d.fid];const m=r.m;if(m.mid&&seen.has(m.mid)){ackTo(m.mid);return}const blob=new Blob(r.parts,{type:m.mime||'application/octet-stream'});
+    await put({mid:m.mid,id:Date.now()+'_'+rid(4),ts:Date.now(),dir:'in',kind:'file',blob,name:m.name||'file',mime:blob.type,size:blob.size,from:m.from||'PC',fromAv:avFor(m),bid:m.bid||null});
+    seen.add(m.mid);ackTo(m.mid);log('受信：'+m.name+'（'+kb(blob.size)+'・'+(m.from||'PC')+'）');renderChat(true);buzz();
   }
 }
 const buzz=()=>{if(navigator.vibrate)navigator.vibrate(30)};
@@ -361,7 +374,10 @@ async function flushPending(){
     if(list.length)log('送信待ち '+list.length+' 件を送信します');
     for(const m of list){
       if(!isOk())break;
-      try{await transmit(m);m.status='sent';await put(m);renderChat()}catch(e){break}
+      try{
+        const got=new Promise((res,rej)=>{waiters[m.mid]=res;setTimeout(()=>{if(waiters[m.mid]){delete waiters[m.mid];rej(new Error('noack'))}},20000+(m.size||0)/30)});
+        await transmit(m);await got;m.status='sent';await put(m);renderChat();
+      }catch(e){log('PCから受信確認が来ないため、再接続して送り直します');connect();break}
     }
   }finally{flushing=false}
 }
@@ -482,7 +498,7 @@ function viewer(m,g){
 $('#menuBtn').onclick=()=>document.body.classList.add('menu');
 $('#shade').onclick=()=>document.body.classList.remove('menu');
 function closePanels(){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('open'))}
-document.querySelectorAll('#menu [data-p]').forEach(b=>b.onclick=()=>{document.body.classList.remove('menu');closePanels();$('#p-'+b.dataset.p).classList.add('open')});
+document.querySelectorAll('#menu [data-p]').forEach(b=>b.onclick=()=>{document.body.classList.remove('menu');closePanels();$('#p-'+b.dataset.p).classList.add('open');if(b.dataset.p==='usage')renderUsage()});
 document.querySelectorAll('.panel .back').forEach(b=>b.onclick=closePanels);
 $('#addPc').onclick=()=>{$('#addBox').hidden=!$('#addBox').hidden;if(!$('#addBox').hidden)$('#code').focus()};
 $('#go').onclick=()=>addPc($('#code').value);
@@ -524,6 +540,20 @@ $('#scanBtn').onclick=openScan;$('#scanShut').onclick=shoot;$('#scanClose').oncl
 $('#camStd').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)queueOut([{kind:'file',blob:f,name:'scan_'+Date.now()+'.jpg',mime:f.type||'image/jpeg',size:f.size}])};
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&stream)closeScan()});
 
+/* ---------- 接続の生存確認 ---------- */
+setInterval(()=>{if(!document.hidden&&isOk()&&Date.now()-lastPing>30000){log('PCの応答がないため再接続します');connect()}},10000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&isOk()&&Date.now()-lastPing>20000)connect()});
+
+/* ---------- 使用容量 ---------- */
+async function renderUsage(){
+  const b=$('#usage');b.textContent='計算中…';
+  const msgs=await all();let inS=0,outS=0;for(const m of msgs){const z=m.blob?m.blob.size:0;m.dir==='in'?inS+=z:outS+=z}
+  let est=null;try{est=await navigator.storage.estimate()}catch(e){}
+  b.innerHTML='<div style="font-size:15px;line-height:2">合計：<b>'+(est?kb(est.usage):'-')+'</b><br>受信した画像・ファイル：'+kb(inS)+'<br>送信した画像・ファイル：'+kb(outS)+'<br>メッセージ数：'+msgs.length+'件</div><p class="sub">保存場所：このiPhoneのSafariの中（このページ専用の保存領域）。写真アプリとは別です。</p>';
+}
+$('#clrIn').onclick=async()=>{if(!confirm('受信した画像・ファイルをすべて削除しますか？'))return;for(const m of await all())if(m.dir==='in'&&m.blob)await del(m.id);renderUsage();renderChat()};
+$('#clrAll').onclick=async()=>{if(!confirm('送信待ち以外のチャット履歴をすべて削除しますか？'))return;for(const m of await all())if(m.status!=='pending')await del(m.id);renderUsage();renderChat()};
+
 /* ---------- アイコン ---------- */
 function drawMyAv(){const b=$('#myAv');b.innerHTML='';b.appendChild(avatarEl(myAvatar,devName,64))}
 $('#avPick').onclick=()=>$('#avFile').click();
@@ -534,7 +564,7 @@ drawMyAv();
 (async()=>{
   const h=norm(location.hash.slice(1));
   if(h.length===10){if(!pcs.some(p=>p.code===h))pcs.push({code:h,name:'新しいPC'});curCode=h;history.replaceState(null,'',location.pathname);savePcs()}
-  renderPcs();renderTarget();await migrate();renderChat(true);connect();
+  renderPcs();renderTarget();await migrate();seen=new Set((await all()).filter(m=>m.mid&&m.dir==='in').map(m=>m.mid));try{navigator.storage.persist()}catch(e){}renderChat(true);connect();
   if(!pcs.length)$('#p-pcs').classList.add('open');
 })();
 </script>
