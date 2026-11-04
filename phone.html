@@ -96,6 +96,13 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
 #view .vt button{flex:1;padding:12px;border-radius:10px;border:0;font-size:15px;background:#333;color:#fff}
 #view .vt button.p{background:#4f7cff}
 [hidden]{display:none!important}
+.apv{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+.abox{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:380px}
+.abox h3{margin:0 0 10px;font-size:17px}
+.abox table{width:100%;font-size:15px;line-height:2}.abox td:first-child{color:#888;width:80px}
+.abox .pn{font-size:28px;font-weight:700;letter-spacing:.2em}
+.abox .mg{display:block;font-size:13px;background:#f6f7f9;padding:8px;border-radius:8px;margin-top:6px}
+.ab{display:flex;gap:10px;margin-top:14px}.ab button{flex:1;padding:13px;border-radius:12px;font-size:16px;border:1px solid #e8b4b4;background:#fff;color:#d32f2f}.ab .yes{background:#4f7cff;border-color:#4f7cff;color:#fff}
 </style></head>
 <body>
 <div class="top">
@@ -318,12 +325,15 @@ function later(){clearTimeout(retry);retry=setTimeout(()=>{if(!document.hidden&&
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&curCode&&!(conn&&conn.open))connect()});
 
 function avFor(d){if(!d.fromId||d.fromId==='pc'){const pc=curPc()||{};return pc.avatar||''}const o=others.find(x=>x.id===d.fromId);return o?o.avatar||'':''}
-let seen=new Set(),lastPing=Date.now();const waiters={};
+let seen=new Set(),lastPing=Date.now(),isAdmin=false;const approvals={};const waiters={};
 function ackTo(mid){if(mid&&conn&&conn.open)sendMsg({type:'ack',mid}).catch(()=>{})}
 async function onData(d){
   if(!d)return;const p=curPc();lastPing=Date.now();
   if(d.type==='ping'){sendMsg({type:'pong'}).catch(()=>{});return}
   if(d.type==='pong')return;
+  if(d.type==='role'){isAdmin=!!d.admin;return}
+  if(d.type==='approve-req'){showApprove(d);return}
+  if(d.type==='approve-done'){const a=approvals[d.reqId];if(a){a.remove();delete approvals[d.reqId];log('接続要求「'+(a._name||'')+'」は'+d.by+'されました')}return}
   if(d.type==='ack'){const w=waiters[d.mid];if(w){delete waiters[d.mid];w()}return}
   if(d.type==='denied'){conn.denied=true;return}
   if(d.type==='hello'){const was=conn.ok;conn.ok=true;$('#pinBox').hidden=true;if(p){if(!p.custom&&d.pcName)p.name=d.pcName;if(d.avatar!==undefined)p.avatar=d.avatar;savePcs()}st((p?p.name:'PC')+'と接続中','on');renderPcs();renderTarget();renderChat();if(!was)flushPending();return}
@@ -539,6 +549,18 @@ async function shoot(){
 $('#scanBtn').onclick=openScan;$('#scanShut').onclick=shoot;$('#scanClose').onclick=closeScan;
 $('#camStd').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)queueOut([{kind:'file',blob:f,name:'scan_'+Date.now()+'.jpg',mime:f.type||'image/jpeg',size:f.size}])};
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&stream)closeScan()});
+
+/* ---------- 新しい端末の承認（承認権限がある場合） ---------- */
+function showApprove(d){
+  if(approvals[d.reqId])return;
+  const m=document.createElement('div');m.className='apv';m._name=d.name;
+  m.innerHTML='<div class="abox"><h3>新しい端末から接続要求</h3><table></table><label class="mg" hidden><input type="checkbox" checked> 以前の「<span></span>」として引き継ぐ</label><p class="sub">相手に確認番号を聞いて、一致していれば許可してください。</p><div class="ab"><button class="no">拒否</button><button class="yes">許可</button></div></div>';
+  const tb=m.querySelector('table');[['名前',d.name],['機種',d.info],['確認番号',d.pin]].forEach(([k,v])=>{const r=tb.insertRow();r.insertCell().textContent=k;const c=r.insertCell();c.textContent=v;if(k==='確認番号')c.className='pn'});
+  if(d.same){m.querySelector('.mg').hidden=false;m.querySelector('.mg span').textContent=d.same}
+  const ans=ok=>{if(!isOk()){alert('PCとの接続が切れています');return}sendMsg({type:'approve-res',reqId:d.reqId,ok,merge:m.querySelector('.mg input').checked});m.remove();delete approvals[d.reqId]};
+  m.querySelector('.yes').onclick=()=>ans(true);m.querySelector('.no').onclick=()=>ans(false);
+  approvals[d.reqId]=m;document.body.appendChild(m);buzz();
+}
 
 /* ---------- 接続の生存確認 ---------- */
 setInterval(()=>{if(!document.hidden&&isOk()&&Date.now()-lastPing>30000){log('PCの応答がないため再接続します');connect()}},10000);
