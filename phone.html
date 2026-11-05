@@ -24,15 +24,27 @@ button,select{font:inherit}
 .msg.in{flex-direction:row;align-items:flex-start;gap:6px}.msg.in .col{display:flex;flex-direction:column;min-width:0}
 #sheet .opt{display:flex;align-items:center;gap:12px;text-align:left;border-bottom:1px solid #f0f0f0}
 #sheet .opt.cur{background:#eef2ff}
-#scan{position:fixed;inset:0;background:#000;z-index:70;display:flex;flex-direction:column}
-#scan video{flex:1;width:100%;object-fit:cover;min-height:0}
-#scan .sb{display:flex;align-items:center;justify-content:space-between;padding:14px 20px calc(18px + env(safe-area-inset-bottom));background:#000;color:#fff}
+#scan{position:fixed;inset:0;background:#000;z-index:70;display:flex;flex-direction:column;color:#fff}
+#scan .st1{display:flex;align-items:center;gap:6px;padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;flex-wrap:wrap}
+#scan .chip{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:99px;padding:6px 12px;font-size:13px}
+#scan .chip.on{background:#fff;color:#000}
+#scan .info{flex:1 1 100%;font-size:12px;opacity:.85;margin-top:4px}
+#scan .vw{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none}
+#scan video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform-origin:center}
+#scan .frame{position:absolute;box-shadow:0 0 0 2000px rgba(0,0,0,.55);border:1.5px solid rgba(255,255,255,.9);pointer-events:none}
+#scan .zm{display:flex;align-items:center;gap:10px;padding:8px 18px}
+#scan .zm input{flex:1}
+#scan .zm b{min-width:46px;text-align:right;font-size:14px}
+#scan .sb{display:flex;align-items:center;justify-content:space-between;padding:6px 20px calc(16px + env(safe-area-inset-bottom))}
 #scan .shut{width:72px;height:72px;border-radius:50%;border:5px solid #fff;background:#fff;box-shadow:inset 0 0 0 3px #000}
 #scan .shut:active{transform:scale(.92)}
-#scan .sbtn{background:none;border:0;color:#fff;font-size:16px;min-width:80px}
-#scan .stop{position:absolute;top:calc(env(safe-area-inset-top) + 10px);left:0;right:0;text-align:center;color:#fff;font-size:14px;text-shadow:0 1px 3px #000}
+#scan .sbtn{background:none;border:0;color:#fff;font-size:15px;min-width:70px}
 #scan .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
-#scan .last{width:56px;height:56px;border-radius:8px;object-fit:cover;background:#222;border:2px solid #fff}
+#scan .last{width:52px;height:52px;border-radius:8px;object-fit:cover;background:#222;border:2px solid #fff}
+#scan .row2{display:flex;gap:8px;justify-content:center;padding:0 10px 4px}
+#scan .lv{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:99px;padding:8px 16px;font-size:14px}
+#scan .lv.on{background:#e53935}
+#scan .badge{position:absolute;top:10px;left:10px;background:#e53935;color:#fff;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px}
 .avbig{display:flex;align-items:center;gap:14px;margin-bottom:12px}
 #timeline{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 10px 14px;display:flex;flex-direction:column;gap:8px}
 .day{align-self:center;font-size:11px;color:#777;background:#dfe3e8;border-radius:99px;padding:2px 10px;margin:4px 0}
@@ -171,7 +183,8 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
   <div class="ph"><button class="back">←</button>使い方</div>
   <div class="card sub" style="font-size:14px;color:#444">
     ・上の宛先をタップして送る相手を選び、🖼（写真・動画）📎（ファイル）または文字を送信します。<br>
-    ・📸 はスキャナーのように使えます。撮影するとそのまま送信され、iPhoneの写真アプリには保存されません。<br>
+    ・📸 はスキャナーのように使えます。撮影するとそのまま送信され、iPhoneの写真アプリには保存されません。比率（4:3・スクエア・16:9）とズーム（スライダー・2本指）が使えます。「高画質で撮る」はiPhone標準カメラの画質で撮影します。<br>
+    ・📸 の画面の「ライブ配信」で、映像と音声をPCにリアルタイムで送れます。<br>
     ・届いた写真や動画をタップすると大きく表示され、「保存」で写真アプリに保存できます。<br>
     ・メッセージを長押しすると、保存・コピー・削除ができます。<br>
     ・相手の端末がオフラインでも、PCが預かって相手がオンラインになったときに自動で届けます（PCの画面が開いている必要があります）。<br>
@@ -182,9 +195,13 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
 </section>
 
 <div id="scan" hidden>
-  <video id="scanV" playsinline muted autoplay></video>
-  <div class="stop" id="scanInfo">シャッターを押すとそのまま送信されます</div>
-  <div class="flash" id="scanFlash"></div>
+  <div class="st1">
+    <button class="chip" data-a="4:3">4:3</button><button class="chip" data-a="1:1">スクエア</button><button class="chip" data-a="16:9">16:9</button><button class="chip" data-a="0">全体</button>
+    <div class="info" id="scanInfo"></div>
+  </div>
+  <div class="vw" id="vw"><video id="scanV" playsinline muted autoplay></video><div class="frame" id="frame"></div><div class="flash" id="scanFlash"></div><div class="badge" id="liveBadge" hidden>● LIVE</div></div>
+  <div class="zm"><span>🔍</span><input type="range" id="zoomR" min="1" max="5" step="0.1" value="1"><b id="zoomL">1.0x</b></div>
+  <div class="row2"><button class="lv" id="hiBtn">📷 高画質で撮る</button><button class="lv" id="liveBtn">🔴 ライブ配信</button><button class="lv" id="micBtn" hidden>🎤 オン</button></div>
   <div class="sb">
     <button class="sbtn" id="scanClose">完了</button>
     <button class="shut" id="scanShut"></button>
@@ -526,28 +543,99 @@ document.addEventListener('focusin',()=>setTimeout(fit,300));
 fit();
 
 /* ---------- スキャン（撮影してそのまま送信・写真アプリに保存しない） ---------- */
-let stream=null,scanBid=null,scanN=0;
+let stream=null,scanBid=null,scanN=0,aspect=ls.get('rs_aspect','4:3'),zoom=1,hwZoom=null,live=null;
+const aspVal=a=>a==='4:3'?4/3:a==='1:1'?1:a==='16:9'?16/9:0;
+const vTrack=()=>stream&&stream.getVideoTracks()[0];
+async function getStream(audio){
+  let last;
+  for(const t of [{width:{ideal:4032},height:{ideal:3024}},{width:{ideal:3840},height:{ideal:2160}},{width:{ideal:1920},height:{ideal:1440}},{}]){
+    try{return await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},...t},audio:audio?{echoCancellation:true,noiseSuppression:true}:false})}catch(e){last=e}
+  }
+  throw last;
+}
+async function attach(s){
+  stream=s;const v=$('#scanV');v.srcObject=s;await v.play().catch(()=>{});
+  const tr=vTrack(),cap=tr&&tr.getCapabilities?tr.getCapabilities():{};
+  hwZoom=cap.zoom&&cap.zoom.max>1?{min:cap.zoom.min||1,max:Math.min(cap.zoom.max,15)}:null;
+  $('#zoomR').max=hwZoom?hwZoom.max:5;
+  await applyZoom();setTimeout(layoutFrame,300);
+}
 async function openScan(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('#camStd').click();return}
-  try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:3840},height:{ideal:2160}},audio:false});
-  }catch(e){if(confirm('カメラを起動できませんでした。標準カメラで撮影しますか？\n（設定 → Safari → カメラ で許可が必要な場合があります）'))$('#camStd').click();return}
-  $('#scanV').srcObject=stream;$('#scan').hidden=false;scanBid=rid(8);scanN=0;$('#scanLast').removeAttribute('src');
-  $('#scanInfo').textContent='宛先：'+tgInfo(target).name+'　シャッターでそのまま送信';
+  try{await attach(await getStream(false))}
+  catch(e){if(confirm('カメラを起動できませんでした。標準カメラで撮影しますか？\n（設定 → Safari → カメラ で許可が必要な場合があります）'))$('#camStd').click();return}
+  $('#scan').hidden=false;scanBid=rid(8);scanN=0;zoom=1;$('#zoomR').value=1;$('#scanLast').removeAttribute('src');
+  setAspect(aspect);info();
 }
-function closeScan(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('#scanV').srcObject=null;$('#scan').hidden=true;renderChat(true)}
+function info(t){const v=$('#scanV');$('#scanInfo').textContent=(t?t+'　':'')+'宛先：'+tgInfo(target).name+(v.videoWidth?'　'+v.videoWidth+'×'+v.videoHeight:'')+(hwZoom?'':'')}
+function closeScan(){stopLive();if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('#scanV').srcObject=null;$('#scan').hidden=true;renderChat(true)}
+function setAspect(a){aspect=a;ls.set('rs_aspect',a);document.querySelectorAll('#scan .chip').forEach(c=>c.classList.toggle('on',c.dataset.a===a));layoutFrame()}
+document.querySelectorAll('#scan .chip').forEach(c=>c.onclick=()=>setAspect(c.dataset.a));
+function layoutFrame(){
+  const v=$('#scanV'),box=$('#vw'),f=$('#frame');if(!v.videoWidth)return;
+  const cw=box.clientWidth,ch=box.clientHeight,s=Math.min(cw/v.videoWidth,ch/v.videoHeight),dw=v.videoWidth*s,dh=v.videoHeight*s,a=aspVal(aspect);
+  let fw=dw,fh=dh;if(a){if(dw/dh>a){fw=dh*a}else{fh=dw/a}}
+  Object.assign(f.style,{width:fw+'px',height:fh+'px',left:(cw-fw)/2+'px',top:(ch-fh)/2+'px'});info();
+}
+addEventListener('resize',()=>{if(stream)setTimeout(layoutFrame,200)});
+async function applyZoom(){
+  const v=$('#scanV'),tr=vTrack();
+  if(hwZoom&&tr){try{await tr.applyConstraints({advanced:[{zoom:Math.max(hwZoom.min,zoom)}]});v.style.transform=''}catch(e){hwZoom=null;$('#zoomR').max=5}}
+  if(!hwZoom)v.style.transform='scale('+zoom+')';
+  $('#zoomL').textContent=zoom.toFixed(1)+'x';
+}
+$('#zoomR').oninput=e=>{zoom=+e.target.value;applyZoom()};
+let pinch=null;
+$('#vw').addEventListener('touchstart',e=>{if(e.touches.length===2){const[a,b]=e.touches;pinch={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),z:zoom}}},{passive:true});
+$('#vw').addEventListener('touchmove',e=>{if(pinch&&e.touches.length===2){const[a,b]=e.touches;const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);zoom=Math.min(+$('#zoomR').max,Math.max(1,pinch.z*d/pinch.d));$('#zoomR').value=zoom;applyZoom()}},{passive:true});
+$('#vw').addEventListener('touchend',()=>{pinch=null},{passive:true});
+function cropDraw(src,w,h,z){
+  const a=aspVal(aspect);let rw=w/z,rh=h/z,cw=rw,ch=rh;
+  if(a){if(rw/rh>a)cw=rh*a;else ch=rw/a}
+  const c=document.createElement('canvas');c.width=Math.round(cw);c.height=Math.round(ch);
+  c.getContext('2d').drawImage(src,(w-cw)/2,(h-ch)/2,cw,ch,0,0,c.width,c.height);return c;
+}
+const scanName=()=>{const d=new Date();return'scan_'+d.getFullYear()+two(d.getMonth()+1)+two(d.getDate())+'_'+two(d.getHours())+two(d.getMinutes())+two(d.getSeconds())+'_'+scanN+'.jpg'};
+async function sendShot(c){
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.95));scanN++;
+  $('#scanLast').src=URL.createObjectURL(blob);
+  info(scanN+'枚 送信'+(isOk()?'':'待ち'));
+  queueOut([{kind:'file',blob,name:scanName(),mime:'image/jpeg',size:blob.size}],{bid:scanBid,quiet:true});
+}
 async function shoot(){
   const v=$('#scanV');if(!v.videoWidth)return;
-  const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);
   const f=$('#scanFlash');f.style.transition='none';f.style.opacity=.8;requestAnimationFrame(()=>{f.style.transition='opacity .25s';f.style.opacity=0});
-  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.9));scanN++;
-  $('#scanLast').src=URL.createObjectURL(blob);
-  $('#scanInfo').textContent=scanN+'枚 撮影・送信'+(isOk()?'':'待ち')+'（宛先：'+tgInfo(target).name+'）';
-  const d=new Date(),name='scan_'+d.getFullYear()+two(d.getMonth()+1)+two(d.getDate())+'_'+two(d.getHours())+two(d.getMinutes())+two(d.getSeconds())+'_'+scanN+'.jpg';
-  queueOut([{kind:'file',blob,name,mime:'image/jpeg',size:blob.size}],{bid:scanBid,quiet:true});
+  sendShot(cropDraw(v,v.videoWidth,v.videoHeight,hwZoom?1:zoom));
 }
 $('#scanBtn').onclick=openScan;$('#scanShut').onclick=shoot;$('#scanClose').onclick=closeScan;
-$('#camStd').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)queueOut([{kind:'file',blob:f,name:'scan_'+Date.now()+'.jpg',mime:f.type||'image/jpeg',size:f.size}])};
+/* 高画質：iPhone標準カメラ（写真アプリには保存されない）で撮って、選んだ比率で切り抜いて送信 */
+$('#hiBtn').onclick=()=>{if(live){alert('ライブ配信中は使えません');return}$('#camStd').click()};
+$('#camStd').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(!scanBid)scanBid=rid(8);
+  try{const bmp=await createImageBitmap(f);await sendShot(cropDraw(bmp,bmp.width,bmp.height,1))}
+  catch(er){queueOut([{kind:'file',blob:f,name:scanName(),mime:f.type||'image/jpeg',size:f.size}],{bid:scanBid})}
+};
+
+/* ---------- ライブ配信（映像＋音声をPCへ） ---------- */
+async function startLive(){
+  if(!isOk()||!peer){alert('PCに接続されていません');return}
+  let s;try{s=await getStream(true)}catch(e){alert('カメラ・マイクを使えません。設定で許可してください');return}
+  const old=stream;await attach(s);if(old&&old!==s)old.getTracks().forEach(t=>t.stop());
+  live=peer.call(PREFIX+curCode,stream,{metadata:{devId,name:devName}});
+  live.on('close',()=>stopLive());live.on('error',()=>stopLive());
+  $('#liveBtn').textContent='■ ライブ停止';$('#liveBtn').classList.add('on');$('#liveBadge').hidden=false;$('#micBtn').hidden=false;$('#micBtn').textContent='🎤 オン';
+  info('ライブ配信中');log('ライブ配信を開始しました');
+}
+function stopLive(){
+  if(!live&&!(stream&&stream.getAudioTracks().length))return;
+  const l=live;live=null;if(l)try{l.close()}catch(e){}
+  if(stream)stream.getAudioTracks().forEach(t=>{t.stop();stream.removeTrack(t)});
+  $('#liveBtn').textContent='🔴 ライブ配信';$('#liveBtn').classList.remove('on');$('#liveBadge').hidden=true;$('#micBtn').hidden=true;
+  if(stream)info('ライブ終了');log('ライブ配信を終了しました');
+}
+$('#liveBtn').onclick=()=>live?stopLive():startLive();
+$('#micBtn').onclick=()=>{const a=stream&&stream.getAudioTracks()[0];if(!a)return;a.enabled=!a.enabled;$('#micBtn').textContent=a.enabled?'🎤 オン':'🎤 ミュート'};
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&stream)closeScan()});
 
 /* ---------- 新しい端末の承認（承認権限がある場合） ---------- */
