@@ -17,7 +17,25 @@ button,select{font:inherit}
 .bar1 b{font-size:17px;flex:1}
 .st{font-size:11px;padding:3px 9px;border-radius:99px;background:#eee;color:#777;max-width:55%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .st.on{background:#dcf5e3;color:#16723a}.st.wait{background:#fff4d6;color:#8a6400}
-.tgb{display:flex;align-items:center;gap:8px;width:100%;margin-top:6px;font-size:15px;padding:4px 12px 4px 4px;border:1px solid #dde;border-radius:99px;background:#f7f8fa;color:#222;text-align:left}
+.tgrow{display:flex;gap:6px;margin-top:6px;align-items:center}
+.hb{background:#f0f2f5;border:0;border-radius:50%;width:32px;height:32px;font-size:17px;color:#333;flex:none}
+.cb{background:#f0f2f5;border:0;border-radius:50%;width:40px;height:40px;font-size:18px;flex:none}
+.sys{align-self:center;font-size:12px;color:#666;background:#e3e7ed;border-radius:12px;padding:4px 12px;margin:2px 0}
+#callUI{position:fixed;inset:0;background:#111;z-index:90;color:#fff;display:flex;flex-direction:column;align-items:center}
+#rV{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111}
+#lV{position:absolute;right:12px;top:calc(env(safe-area-inset-top) + 12px);width:28vw;max-width:150px;border-radius:12px;background:#000;object-fit:cover;z-index:2;transform:scaleX(-1)}
+.cinfo{position:relative;z-index:2;margin-top:calc(env(safe-area-inset-top) + 70px);text-align:center;text-shadow:0 1px 4px #000}
+.cinfo b{display:block;font-size:24px;margin-top:10px}
+#cState{font-size:15px;opacity:.85;margin-top:6px}
+#callUI.talking.vid .cinfo{margin-top:calc(env(safe-area-inset-top) + 14px);align-self:flex-start;margin-left:16px;text-align:left}
+#callUI.talking.vid .cinfo .av{display:none}
+#callUI.talking.vid .cinfo b{font-size:17px;margin-top:0}
+.cbtns{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 40px);left:0;right:0;display:flex;justify-content:center;gap:22px;z-index:2}
+.cbtns button{width:64px;height:64px;border-radius:50%;border:0;background:rgba(255,255,255,.2);color:#fff;font-size:24px}
+.cbtns button.off{background:#fff;color:#111}
+.cbtns .dec{background:#e53935}.cbtns .acc{background:#22a35a}
+#cSnd{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 130px);z-index:3;background:#fff;color:#111;border:0;border-radius:99px;padding:10px 18px;font-size:15px}
+.tgb{display:flex;align-items:center;gap:8px;flex:1;min-width:0;font-size:15px;padding:4px 12px 4px 4px;border:1px solid #dde;border-radius:99px;background:#f7f8fa;color:#222;text-align:left}
 .tgb span.n{flex:1}.tgb::after{content:'▾';color:#888}
 .av{border-radius:50%;object-fit:cover;flex:none;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;overflow:hidden;background:#999}
 .off{opacity:.45}
@@ -128,8 +146,8 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
 </style></head>
 <body>
 <div class="top">
-  <div class="bar1"><button id="menuBtn" class="ham">☰</button><b>画像シェア</b><span id="st" class="st">未接続</span></div>
-  <button id="tgBtn" class="tgb"></button>
+  <div class="bar1"><button id="menuBtn" class="ham">☰</button><b>画像シェア</b><span id="st" class="st">未接続</span><button id="reloadBtn" class="hb" title="ページを更新">↻</button></div>
+  <div class="tgrow"><button id="tgBtn" class="tgb"></button><button id="callA" class="cb" title="音声通話">📞</button><button id="callV" class="cb" title="ビデオ通話">📹</button></div>
 </div>
 
 <div id="timeline"></div>
@@ -200,6 +218,8 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
     ・相手の端末がオフラインでも、PCが預かって相手がオンラインになったときに自動で届けます（PCの画面が開いている必要があります）。<br>
     ・PCに接続されていない間に送ったものは「送信待ち」になり、接続したときに自動で送信されます。<br>
     ・5件以上まとめて送ると、PCでは自動で1つのフォルダにまとめられます。<br>
+    ・宛先を選んで 📞（音声通話）📹（ビデオ通話）で通話できます。相手がこのページを開いていると、着信音と「応答」ボタンが出ます（ページを閉じている相手には着信できません。iPhoneのマナーモード中は着信音が鳴りません）。<br>
+    ・右上の ↻ でページを更新できます。<br>
     ・ホーム画面に追加すると、アプリのように使えて、データも消えにくくなります。
   </div>
 </section>
@@ -212,13 +232,21 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
   </div>
   <div class="vw" id="vw"><video id="scanV" playsinline muted autoplay></video><canvas id="fxC" hidden></canvas><div class="frame" id="frame"></div><div class="flash" id="scanFlash"></div><div class="badge" id="liveBadge" hidden>● LIVE</div></div>
   <div class="zm"><button class="zp" data-z="1">1x</button><button class="zp" data-z="2">2x</button><button class="zp" data-z="3">3x</button><input type="range" id="zoomR" min="1" max="5" step="0.1" value="1"><b id="zoomL">1.0x</b></div>
-  <div class="row2 fxr"><span>効果</span><button class="chip fx on" data-f="0">なし</button><button class="chip fx" data-f="1">アニメ調</button><button class="chip fx" data-f="2">スケッチ</button><button class="chip fx" data-f="3">モザイク</button></div>
+  <div class="row2 fxr"><span>効果</span><button class="chip fx on" data-f="0">なし</button><button class="chip fx" data-f="1">アニメ調</button><button class="chip fx" data-f="2">スケッチ</button><button class="chip fx" data-f="3">モザイク</button><span id="mzL" hidden><button class="chip mz" data-m="8">弱</button><button class="chip mz on" data-m="16">中</button><button class="chip mz" data-m="32">強</button></span></div>
   <div class="row2"><button class="lv" id="hiBtn">📷 高画質</button><button class="lv" id="liveBtn">🔴 ライブ配信</button><button class="lv" id="micBtn" hidden>🎤 オン</button></div>
   <div class="sb">
     <button class="sbtn" id="scanClose">完了</button>
     <button class="shut" id="scanShut"></button>
     <img class="last" id="scanLast" alt="">
   </div>
+</div>
+<div id="callUI" hidden>
+  <video id="rV" playsinline autoplay></video>
+  <video id="lV" playsinline autoplay muted hidden></video>
+  <div class="cinfo"><span id="cAv"></span><b id="cName"></b><div id="cState"></div></div>
+  <div class="cbtns" id="cIn"><button class="dec" id="cDec">✕</button><button class="acc" id="cAcc">📞</button></div>
+  <div class="cbtns" id="cAct" hidden><button id="cMute">🎤</button><button id="cCam">📷</button><button id="cFlip">🔄</button><button class="dec" id="cEnd">✕</button></div>
+  <button id="cSnd" hidden>🔈 タップして音声を出す</button>
 </div>
 <div id="lview" hidden><video id="lvV" playsinline autoplay></video><div class="lvh"><span class="lb">● LIVE</span><b id="lvName"></b><span style="flex:1"></span><button id="lvSnd">🔊</button><button id="lvSnap">📷</button><button id="lvX">✕</button></div></div>
 <input type="file" id="camStd" accept="image/*" capture="environment" hidden>
@@ -363,6 +391,7 @@ async function onData(d){
   if(d.type==='ping'){sendMsg({type:'pong'}).catch(()=>{});return}
   if(d.type==='pong')return;
   if(d.type==='role'){isAdmin=!!d.admin;return}
+  if(d.type==='sig'){onSig(d.from,d.fromName,d.payload||{});return}
   if(d.type==='approve-req'){showApprove(d);return}
   if(d.type==='approve-done'){const a=approvals[d.reqId];if(a){a.remove();delete approvals[d.reqId];log('接続要求「'+(a._name||'')+'」は'+d.by+'されました')}return}
   if(d.type==='ack'){const w=waiters[d.mid];if(w){delete waiters[d.mid];w()}return}
@@ -470,6 +499,7 @@ async function renderNow(bottom){
   }finally{busy=false;if(again){again=false;renderNow(bottom)}}
 }
 function bubble(g){
+  if(g[0].kind==='sys'){const d=document.createElement('div');d.className='sys';d.textContent=hm(g[0].ts)+'　'+g[0].text;return d}
   const m=g[0],outer=document.createElement('div');outer.className='msg '+m.dir;let w=outer;
   if(m.dir==='in'){const src=m.fromAv!==undefined?m.fromAv:'';outer.appendChild(avatarEl(src,m.from,30));w=document.createElement('div');w.className='col';outer.appendChild(w);const who=document.createElement('div');who.className='who';who.textContent=m.from;w.appendChild(who)}
   const b=document.createElement('div');b.className='bub';
@@ -660,10 +690,10 @@ let gl,glProg,glTex,fxRaf=0,fxTrack=null;
 function initGL(){
   const c=$('#fxC');gl=c.getContext('webgl',{premultipliedAlpha:false});if(!gl)return false;
   const vs='attribute vec2 p;varying vec2 uv;void main(){uv=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0,1);}';
-  const fs=`precision mediump float;uniform sampler2D t;uniform vec2 px;uniform int mode;varying vec2 uv;
+  const fs=`precision mediump float;uniform sampler2D t;uniform vec2 px;uniform int mode;uniform float cs;varying vec2 uv;
 float L(vec2 o){return dot(texture2D(t,uv+o*px).rgb,vec3(.299,.587,.114));}
 void main(){
- if(mode==3){vec2 cell=px*14.;gl_FragColor=texture2D(t,(floor(uv/cell)+.5)*cell);return;}
+ if(mode==3){vec2 cell=px*cs;gl_FragColor=texture2D(t,(floor(uv/cell)+.5)*cell);return;}
  vec3 c=texture2D(t,uv).rgb;
  float gx=-L(vec2(-1,-1))-2.*L(vec2(-1,0))-L(vec2(-1,1))+L(vec2(1,-1))+2.*L(vec2(1,0))+L(vec2(1,1));
  float gy=-L(vec2(-1,-1))-2.*L(vec2(0,-1))-L(vec2(1,-1))+L(vec2(-1,1))+2.*L(vec2(0,1))+L(vec2(1,1));
@@ -690,7 +720,7 @@ function fxLoop(){
     if(c.width!==w||c.height!==h){c.width=w;c.height=h;gl.viewport(0,0,w,h)}
     gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,v);
     gl.uniform2f(gl.getUniformLocation(glProg,'px'),1.5/w,1.5/h);
-    gl.uniform1i(gl.getUniformLocation(glProg,'mode'),fxMode);
+    gl.uniform1i(gl.getUniformLocation(glProg,'mode'),fxMode);gl.uniform1f(gl.getUniformLocation(glProg,'cs'),mzSize/1.5);
     gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   }
   fxRaf=requestAnimationFrame(fxLoop);
@@ -698,11 +728,13 @@ function fxLoop(){
 function setFx(m){
   m=+m;document.querySelectorAll('#scan .fx').forEach(b=>b.classList.toggle('on',+b.dataset.f===m));
   if(m&&!gl&&!initGL()){alert('この端末では効果を使えません');m=0}
-  fxMode=m;cancelAnimationFrame(fxRaf);$('#fxC').hidden=!m;
+  fxMode=m;cancelAnimationFrame(fxRaf);$('#fxC').hidden=!m;$('#mzL').hidden=m!==3;
   if(m){fxLoop();if(!fxTrack&&$('#fxC').captureStream)fxTrack=$('#fxC').captureStream(30).getVideoTracks()[0]}
   replaceLiveVideo();
 }
+let mzSize=ls.get('rs_mz',16);
 document.querySelectorAll('#scan .fx').forEach(b=>b.onclick=()=>setFx(b.dataset.f));
+document.querySelectorAll('#scan .mz').forEach(b=>{b.classList.toggle('on',+b.dataset.m===mzSize);b.onclick=()=>{mzSize=+b.dataset.m;ls.set('rs_mz',mzSize);document.querySelectorAll('#scan .mz').forEach(x=>x.classList.toggle('on',x===b))}});
 
 /* ---------- ライブ配信（映像＋音声）：PC・他のiPhoneへ ---------- */
 const liveVideoTrack=()=>fxMode&&fxTrack?fxTrack:vTrack();
@@ -733,6 +765,7 @@ $('#micBtn').onclick=()=>{if(!micTrack)return;micTrack.enabled=!micTrack.enabled
 /* ---------- 他の端末からのライブを見る ---------- */
 let inCall=null;
 function onIncomingCall(call){
+  if(call.metadata&&call.metadata.mode==='call'){onCallMedia(call);return}
   const o=others.find(x=>x.peer===call.peer);
   if(!o||inCall){try{call.close()}catch(e){}return}
   sheet([['「'+o.name+'」のライブを見る',()=>{
@@ -759,6 +792,107 @@ function showApprove(d){
   m.querySelector('.yes').onclick=()=>ans(true);m.querySelector('.no').onclick=()=>ans(false);
   approvals[d.reqId]=m;document.body.appendChild(m);buzz();
 }
+
+$('#reloadBtn').onclick=()=>location.reload();
+
+/* ---------- 通話（音声・ビデオ） ---------- */
+let call=null,actx=null,toneT=null,flashT=null;
+function ac(){try{if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume()}catch(e){}return actx}
+['touchend','click'].forEach(ev=>document.addEventListener(ev,()=>ac(),{passive:true}));
+function tone(kind){
+  stopTone();const pat=kind==='ring'?[[880,.35],[660,.35],[880,.35],[0,1.5]]:[[425,1],[0,2]];let i=0;
+  const play=()=>{const[f,d]=pat[i++%pat.length];const a=ac();if(f&&a){const o=a.createOscillator(),g=a.createGain();o.frequency.value=f;g.gain.setValueAtTime(.18,a.currentTime);g.gain.setValueAtTime(0,a.currentTime+d-.02);o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+d)}toneT=setTimeout(play,d*1000)};play();
+}
+function stopTone(){clearTimeout(toneT);toneT=null}
+function flashTitle(on){clearInterval(flashT);document.title='画像シェア';if(on){let k=0;flashT=setInterval(()=>{document.title=k++%2?'画像シェア':'📞 着信中'},800)}}
+const sig=(to,p)=>{if(isOk())sendMsg({type:'sig',to,payload:p}).catch(()=>{})};
+const peerOf=dev=>dev==='pc'?PREFIX+curCode:((others.find(o=>o.id===dev)||{}).peer||null);
+const nameOf=dev=>dev==='pc'?((curPc()||{}).name||'PC'):((others.find(o=>o.id===dev)||{}).name||'相手');
+const avOf2=dev=>dev==='pc'?((curPc()||{}).avatar||''):((others.find(o=>o.id===dev)||{}).avatar||'');
+async function getLocal(kind){return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:kind==='video'?{facingMode:'user',width:{ideal:1280},height:{ideal:720}}:false})}
+function callUI(state){
+  const u=$('#callUI');u.hidden=false;u.classList.toggle('vid',call.kind==='video');
+  $('#cAv').innerHTML='';$('#cAv').appendChild(avatarEl(call.avatar||avOf2(call.dev),call.name,96));
+  $('#cName').textContent=call.name;$('#cState').textContent=state;
+  $('#cIn').hidden=!(call.dir==='in'&&!call.accepted);$('#cAct').hidden=!$('#cIn').hidden;
+  $('#cCam').hidden=$('#cFlip').hidden=call.kind!=='video';
+  if(call.local&&call.kind==='video'){$('#lV').srcObject=call.local;$('#lV').hidden=false}
+}
+async function startCall(kind){
+  if(call)return;
+  if(target==='all'){alert('通話は相手を1人選んでください');return}
+  if(!isOk()){alert('PCに接続されていません');return}
+  const dev=target;if(!peerOf(dev)||(dev!=='pc'&&!(others.find(o=>o.id===dev)||{}).online)){alert('相手がオフラインです');return}
+  let local;try{local=await getLocal(kind)}catch(e){alert('マイク'+(kind==='video'?'・カメラ':'')+'を使えません。設定で許可してください');return}
+  call={id:rid(10),dev,kind,dir:'out',name:nameOf(dev),local};
+  callUI('呼び出し中…');tone('back');
+  sig(dev,{t:'ring',callId:call.id,kind,name:devName,avatar:myAvatar});
+  call.to=setTimeout(()=>{sig(call.dev,{t:'cancel',callId:call.id});endCall('応答がありませんでした')},45000);
+}
+$('#callA').onclick=()=>startCall('audio');$('#callV').onclick=()=>startCall('video');
+function onSig(from,fromName,p){
+  if(p.t==='ring'){
+    if(call){sig(from,{t:'busy',callId:p.callId});addSys('📞 '+(p.name||fromName)+'から着信（通話中のため応答できませんでした）');return}
+    call={id:p.callId,dev:from,kind:p.kind,dir:'in',name:p.name||fromName,avatar:p.avatar};
+    callUI((p.kind==='video'?'ビデオ通話':'音声通話')+'の着信');tone('ring');flashTitle(true);buzz();
+    call.to=setTimeout(()=>{sig(from,{t:'decline',callId:p.callId,missed:true});endCall(null,'不在着信：'+call.name)},45000);
+    return;
+  }
+  if(!call||p.callId!==call.id)return;
+  if(p.t==='accept'&&call.dir==='out'){
+    clearTimeout(call.to);stopTone();$('#cState').textContent='接続中…';
+    const mc=peer.call(peerOf(call.dev),call.local,{metadata:{mode:'call',callId:call.id}});wireMedia(mc);
+  }
+  else if(p.t==='decline')endCall(p.missed?'応答がありませんでした':'拒否されました');
+  else if(p.t==='busy')endCall('相手は通話中です');
+  else if(p.t==='unavailable')endCall('相手がオフラインです');
+  else if(p.t==='cancel')endCall(null,'不在着信：'+call.name);
+  else if(p.t==='hangup')endCall('通話終了');
+}
+$('#cAcc').onclick=async()=>{
+  if(!call)return;stopTone();flashTitle(false);clearTimeout(call.to);
+  try{call.local=await getLocal(call.kind)}catch(e){alert('マイク・カメラを使えません');sig(call.dev,{t:'decline',callId:call.id});endCall(null);return}
+  call.accepted=true;callUI('接続中…');sig(call.dev,{t:'accept',callId:call.id});
+  call.to=setTimeout(()=>{if(call&&!call.media){sig(call.dev,{t:'hangup',callId:call.id});endCall('接続できませんでした')}},20000);
+};
+$('#cDec').onclick=()=>{if(!call)return;sig(call.dev,{t:'decline',callId:call.id});endCall(null,'着信を拒否：'+call.name)};
+$('#cEnd').onclick=()=>{if(!call)return;sig(call.dev,{t:call.media?'hangup':'cancel',callId:call.id});endCall('通話終了')};
+function onCallMedia(mc){
+  if(!call||call.dir!=='in'||!call.accepted||mc.metadata.callId!==call.id){try{mc.close()}catch(e){}return}
+  mc.answer(call.local);wireMedia(mc);
+}
+function wireMedia(mc){
+  call.media=mc;
+  mc.on('stream',st=>{
+    if(!call)return;clearTimeout(call.to);const v=$('#rV');v.srcObject=st;v.muted=false;
+    v.play().then(()=>$('#cSnd').hidden=true).catch(()=>{$('#cSnd').hidden=false});
+    if(call.t0)return;call.t0=Date.now();$('#callUI').classList.add('talking');callUI('00:00');
+    clearInterval(call.tick);const cc=call;call.tick=setInterval(()=>{if(call!==cc){clearInterval(cc.tick);return}const s=Math.floor((Date.now()-cc.t0)/1000);$('#cState').textContent=two(Math.floor(s/60))+':'+two(s%60)},1000);
+  });
+  mc.on('close',()=>{if(call&&call.media===mc)endCall('通話終了')});mc.on('error',()=>{if(call&&call.media===mc)endCall('通話が切れました')});
+}
+$('#cSnd').onclick=()=>{$('#rV').play().then(()=>$('#cSnd').hidden=true).catch(()=>{})};
+$('#cMute').onclick=()=>{const t=call&&call.local&&call.local.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;$('#cMute').classList.toggle('off',!t.enabled)};
+$('#cCam').onclick=()=>{const t=call&&call.local&&call.local.getVideoTracks()[0];if(!t)return;t.enabled=!t.enabled;$('#cCam').classList.toggle('off',!t.enabled)};
+$('#cFlip').onclick=async()=>{
+  if(!call||!call.local)return;const old=call.local.getVideoTracks()[0];if(!old)return;
+  call.face=call.face==='environment'?'user':'environment';
+  try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:call.face,width:{ideal:1280},height:{ideal:720}}});const nt=s.getVideoTracks()[0];
+    if(call.media){const sd=call.media.peerConnection.getSenders().find(x=>x.track&&x.track.kind==='video');if(sd)await sd.replaceTrack(nt)}
+    call.local.removeTrack(old);old.stop();call.local.addTrack(nt);$('#lV').srcObject=call.local;$('#lV').style.transform=call.face==='user'?'scaleX(-1)':'';
+  }catch(e){}
+};
+function endCall(msg,sysText){
+  if(!call)return;const c=call;call=null;
+  stopTone();flashTitle(false);clearTimeout(c.to);clearInterval(c.tick);
+  if(c.media)try{c.media.close()}catch(e){}
+  if(c.local)c.local.getTracks().forEach(t=>t.stop());
+  $('#rV').srcObject=null;$('#lV').srcObject=null;$('#lV').hidden=true;$('#cSnd').hidden=true;$('#callUI').classList.remove('talking');
+  if(msg){$('#cState').textContent=msg;$('#cIn').hidden=true;$('#cAct').hidden=true;setTimeout(()=>{if(!call)$('#callUI').hidden=true},1500)}else $('#callUI').hidden=true;
+  const dur=c.t0?Math.floor((Date.now()-c.t0)/1000):0;
+  addSys(sysText||((c.kind==='video'?'📹 ビデオ通話':'📞 音声通話')+(c.dir==='out'?'（発信）':'（着信）')+'：'+c.name+(dur?'　'+two(Math.floor(dur/60))+':'+two(dur%60):'　'+(msg||''))));
+}
+async function addSys(text){await put({id:Date.now()+'_'+rid(4),ts:Date.now(),dir:'in',kind:'sys',text});renderChat(true)}
 
 /* ---------- 接続の生存確認 ---------- */
 setInterval(()=>{if(!document.hidden&&isOk()&&Date.now()-lastPing>30000){log('PCの応答がないため再接続します');connect()}},10000);
