@@ -427,13 +427,13 @@ async function onData(d){
   if(d.type==='hello'){const was=conn.ok;conn.ok=true;$('#pinBox').hidden=true;if(p){if(!p.custom&&d.pcName)p.name=d.pcName;if(d.avatar!==undefined)p.avatar=d.avatar;savePcs()}st((p?p.name:'PC')+'と接続中','on');renderPcs();renderTarget();renderChat();if(!was)flushPending();return}
   if(d.type==='peers'){others=d.list||[];renderTarget();return}
   if(d.type==='status'){const m=(await all()).find(x=>x.mid===d.mid);if(m){m.notes=[...new Set([...(m.notes||[]),d.note])].slice(-4);await put(m);renderChat()}log(d.note);return}
-  if(d.type==='text'){if(d.mid&&seen.has(d.mid)){ackTo(d.mid);return}await put({mid:d.mid,id:Date.now()+'_'+rid(4),ts:Date.now(),dir:'in',kind:'text',text:d.text,from:d.from||'PC',fromAv:avFor(d)});seen.add(d.mid);ackTo(d.mid);log('受信：テキスト（'+(d.from||'PC')+'）');renderChat(true);buzz();return}
+  if(d.type==='text'){if(d.mid&&seen.has(d.mid)){ackTo(d.mid);return}await put({mid:d.mid,id:Date.now()+'_'+rid(4),ts:d.ts||Date.now(),dir:'in',kind:'text',text:d.text,from:d.from||'PC',fromAv:avFor(d)});seen.add(d.mid);ackTo(d.mid);log('受信：テキスト（'+(d.from||'PC')+'）');renderChat(true);buzz();return}
   if(d.type==='meta'){rx[d.fid]={m:d,parts:[],got:0};return}
   const r=rx[d.fid];if(!r)return;
   if(d.type==='chunk'){r.parts.push(d.data);r.got+=d.data.byteLength;if(r.m.size>512*1024)prog(d.fid,'受信 '+r.m.name,r.got/r.m.size)}
   else if(d.type==='end'){
     delete rx[d.fid];const m=r.m;if(m.mid&&seen.has(m.mid)){ackTo(m.mid);return}const blob=new Blob(r.parts,{type:m.mime||'application/octet-stream'});
-    await put({mid:m.mid,id:Date.now()+'_'+rid(4),ts:Date.now(),dir:'in',kind:'file',blob,name:m.name||'file',mime:blob.type,size:blob.size,from:m.from||'PC',fromAv:avFor(m),bid:m.bid||null});
+    await put({mid:m.mid,id:Date.now()+'_'+rid(4),ts:m.ts||Date.now(),dir:'in',kind:'file',blob,name:m.name||'file',mime:blob.type,size:blob.size,from:m.from||'PC',fromAv:avFor(m),bid:m.bid||null});
     seen.add(m.mid);ackTo(m.mid);log('受信：'+m.name+'（'+kb(blob.size)+'・'+(m.from||'PC')+'）');renderChat(true);buzz();
   }
 }
@@ -479,10 +479,12 @@ async function flushPending(){
     }
   }finally{flushing=false}
 }
+let lastTs=0;
 async function queueOut(list,opts){
   const to=target||'pc',bid=opts&&opts.bid?opts.bid:list.length>1?rid(8):null;
-  for(const x of list){
-    const m={id:Date.now()+'_'+rid(4),mid:rid(10),ts:Date.now(),dir:'out',to,toLabel:toLabel(to),bid,bcount:list.length,status:'pending',...x};
+  const tss=list.map(()=>lastTs=Math.max(Date.now(),lastTs+1));
+  for(const [k,x] of list.entries()){
+    const m={id:Date.now()+'_'+rid(4),mid:rid(10),ts:tss[k],dir:'out',to,toLabel:toLabel(to),bid,bcount:list.length,status:'pending',...x};
     await put(m);
   }
   renderChat(true);
@@ -510,7 +512,7 @@ async function renderNow(bottom){
   if(busy){again=true;return}busy=true;
   try{
     const tl=$('#timeline'),near=tl.scrollTop+tl.clientHeight>tl.scrollHeight-150;
-    const msgs=(await all()).sort((a,b)=>a.ts-b.ts).slice(-150);
+    const msgs=(await all()).sort((a,b)=>(a.ts-b.ts)||(a.id<b.id?-1:1)).slice(-150);
     const nodes=[],used=new Set();
     if(!msgs.length){tl.innerHTML='<div class="empty">メッセージはまだありません<br>📸 で撮影して送信、🖼 で写真、📎 でファイル、<br>下の欄で文字を送れます</div>';return}
     let day='';
