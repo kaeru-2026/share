@@ -49,6 +49,7 @@ button,select{font:inherit}
 #scan .info{flex:1 1 100%;font-size:12px;opacity:.85;margin-top:4px}
 #scan .vw{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none}
 #scan video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;transform-origin:center}
+#clip{position:absolute;overflow:hidden;background:#000}
 #scan .frame{position:absolute;box-shadow:0 0 0 2000px rgba(0,0,0,.55);border:1.5px solid rgba(255,255,255,.9);pointer-events:none}
 #scan .zm{display:flex;align-items:center;gap:10px;padding:8px 18px}
 #scan .zm input{flex:1}
@@ -221,7 +222,7 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
     ・📸 はスキャナーのように使えます。撮影するとそのまま送信され、iPhoneの写真アプリには保存されません。比率（4:3・スクエア・16:9）とズーム（スライダー・2本指）が使えます。「高画質で撮る」はiPhone標準カメラの画質で撮影します。<br>
     ・📸 の画面の「ライブ配信」で、映像と音声を宛先（PC・他のiPhone・全員）にリアルタイムで送れます。🔄でインカメラに切り替え、「効果」でアニメ調などに加工できます。<br>
     ・届いた写真や動画をタップすると大きく表示され、「保存」で写真アプリに保存できます。<br>
-    ・メッセージを長押しすると、保存・コピー・削除ができます。<br>
+    ・メッセージを長押しすると、保存・コピー・削除ができます。まとめて届いた画像を1枚だけ削除するときは、その画像をタップして「削除」を押します。<br>
     ・相手の端末がオフラインでも、PCが預かって相手がオンラインになったときに自動で届けます（PCの画面が開いている必要があります）。<br>
     ・PCに接続されていない間に送ったものは「送信待ち」になり、接続したときに自動で送信されます。<br>
     ・5件以上まとめて送ると、PCでは自動で1つのフォルダにまとめられます。<br>
@@ -237,7 +238,7 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
     <button class="chip flip" id="flipBtn">🔄 切替</button>
     <div class="info" id="scanInfo"></div>
   </div>
-  <div class="vw" id="vw"><video id="scanV" playsinline muted autoplay></video><canvas id="fxC" hidden></canvas><div class="frame" id="frame"></div><div class="flash" id="scanFlash"></div><div class="badge" id="liveBadge" hidden>● LIVE</div></div>
+  <div class="vw" id="vw"><div id="clip"><video id="scanV" playsinline muted autoplay></video><canvas id="fxC" hidden></canvas></div><div class="frame" id="frame" hidden></div><div class="flash" id="scanFlash"></div><div class="badge" id="liveBadge" hidden>● LIVE</div></div>
   <div class="zm"><button class="zp" data-z="1">1x</button><button class="zp" data-z="2">2x</button><button class="zp" data-z="3">3x</button><input type="range" id="zoomR" min="1" max="5" step="0.1" value="1"><b id="zoomL">1.0x</b></div>
   <div class="row2 fxr"><span>効果</span><button class="chip fx on" data-f="0">なし</button><button class="chip fx" data-f="1">アニメ調</button><button class="chip fx" data-f="2">スケッチ</button><button class="chip fx" data-f="3">モザイク</button><span id="mzL" hidden><button class="chip mz" data-m="8">弱</button><button class="chip mz on" data-m="16">中</button><button class="chip mz" data-m="32">強</button></span></div>
   <div class="row2"><button class="lv" id="hiBtn">📷 高画質</button><button class="lv" id="liveBtn">🔴 ライブ配信</button><button class="lv" id="micBtn" hidden>🎤 オン</button></div>
@@ -591,6 +592,7 @@ function viewer(m,g){
   const btn=(x,f,p)=>{const b=document.createElement('button');b.textContent=x;if(p)b.className='p';b.onclick=f;t.appendChild(b)};
   btn('閉じる',()=>v.remove());
   if(g.length>1)btn('すべて保存',()=>shareFiles(g));
+  btn('削除',async()=>{if(!confirm('この'+(k==='video'?'動画':'画像')+'を削除しますか？'))return;await del(m.id);v.remove();renderChat()});
   btn('保存',()=>shareFiles([m]),true);
   v.append(box,t);document.body.appendChild(v);
 }
@@ -649,8 +651,9 @@ document.querySelectorAll('#scan .chip[data-a]').forEach(c=>c.onclick=()=>setAsp
 function layoutFrame(){
   const v=$('#scanV'),box=$('#vw'),f=$('#frame');if(!v.videoWidth)return;
   const cw=box.clientWidth,ch=box.clientHeight,s=Math.min(cw/v.videoWidth,ch/v.videoHeight),dw=v.videoWidth*s,dh=v.videoHeight*s,a=aspVal(aspect);
-  let fw=dw,fh=dh;if(a){if(dw/dh>a){fw=dh*a}else{fh=dw/a}}
-  Object.assign(f.style,{width:fw+'px',height:fh+'px',left:(cw-fw)/2+'px',top:(ch-fh)/2+'px'});info();
+  let fw=dw,fh=dh;if(a){if(cw/ch>a){fh=ch;fw=ch*a}else{fw=cw;fh=cw/a}}
+  Object.assign($('#clip').style,{width:fw+'px',height:fh+'px',left:(cw-fw)/2+'px',top:(ch-fh)/2+'px'});
+  const fit=a?'cover':'contain';v.style.objectFit=fit;$('#fxC').style.objectFit=fit;info();
 }
 addEventListener('resize',()=>{if(stream)setTimeout(layoutFrame,200)});
 /* ズーム：カメラ本体のズームは連続で呼ぶと固まるため、1回ずつ順番に適用 */
