@@ -549,7 +549,7 @@ textarea{min-height:64px;resize:vertical}
 .bc .cards .bb{display:flex;justify-content:space-between;align-items:baseline;border-top:1px dashed #ddd;margin-top:6px;padding-top:6px}
 `;
   // 買取計算の画面を box に作る。onSave(id, buy) で商品ごとの変更（販売先・販売価格・サイズ）を保存
-  function openBuy(box, items, cfg, { mobile = false, onSave } = {}) {
+  function openBuy(box, items, cfg, { mobile = false, onSave, onOpt } = {}) {
     if (!document.getElementById('bc-css')) { const st = document.createElement('style'); st.id = 'bc-css'; st.textContent = BUY_CSS; document.head.appendChild(st); }
     cfg = mergeCfg(cfg);
     const o = { priceCol: cfg.priceCol, profitMode: cfg.profitMode, profitRate: cfg.profitRate, profitYen: cfg.profitYen, minProfit: cfg.minProfit, round: cfg.round };
@@ -605,6 +605,7 @@ textarea{min-height:64px;resize:vertical}
         o[t.dataset.o] = t.dataset.o === 'priceCol' || t.dataset.o === 'profitMode' ? t.value : +t.value;
         // 基準を変えたら、手で直した販売価格は基準の価格に戻す
         if (t.dataset.o === 'priceCol') items.forEach((it) => { if (it.buy && it.buy.price !== undefined) { delete it.buy.price; onSave?.(it.id, it.buy); } });
+        onOpt?.({ ...o }); // 変更した設定値は記憶する
         if (t.tagName === 'SELECT') draw();
         else { clearTimeout(draw.tm); draw.tm = setTimeout(() => draw(`[data-o="${t.dataset.o}"]`), 700); }
         return;
@@ -1065,7 +1066,7 @@ $('#buySel').onclick = () => {
   const list = [...$('#jobs').querySelectorAll('input:checked')].map((i) => jobs.get(i.dataset.id)).filter((j) => j?.state === 'done');
   if (!list.length) return;
   const items = list.map((j) => ({ id: j.id, name: j.result?.product?.name || '商品名不明', cond: j.result?.condition?.label || '', thumb: j.thumb, rec: j.result?.final?.recommend || {}, size: j.result?.ship?.size || '', buy: j.buy ? { ...j.buy } : undefined }));
-  SateiView.openBuy($('#buyBox'), items, SateiView.getCfg(), { mobile: true, onSave: (id, b) => { const j = jobs.get(id); if (j) { j.buy = b; db.put(j); } } });
+  SateiView.openBuy($('#buyBox'), items, SateiView.getCfg(), { mobile: true, onSave: (id, b) => { const j = jobs.get(id); if (j) { j.buy = b; db.put(j); } }, onOpt: (o) => { const c = { ...(ls.get('as_cfg') || {}), ...o }; ls.set('as_cfg', c); SateiView.setCfg(c); if (ok) try { conn.send({ t: 'cfgSet', opt: o }); } catch {} } });
   $('#buySheet').hidden = false; $('#buySheet').scrollTop = 0;
   document.body.style.overflow = 'hidden';
 };
