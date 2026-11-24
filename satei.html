@@ -133,6 +133,10 @@ textarea{min-height:64px;resize:vertical}
       <button id="selMode" class="ghost sm">選択</button>
       <button id="delSel" class="ghost sm danger" hidden>削除</button>
     </div>
+    <div id="selBar" class="two" style="margin-bottom:8px" hidden>
+      <button id="allSel" class="ghost">全て選択</button>
+      <button id="redoSel" class="ghost">再査定</button>
+    </div>
     <button id="buySel" class="big" hidden>買取価格を計算</button>
     <div id="jobs"></div>
   </section>
@@ -995,8 +999,17 @@ function updateRow(j) {
   }
   render();
 }
-function updDel() { const ids = [...$('#jobs').querySelectorAll('input:checked')].map((i) => i.dataset.id); const n = ids.length, nd = ids.filter((id) => jobs.get(id)?.state === 'done').length; $('#delSel').hidden = !selMode; $('#delSel').textContent = n ? `削除（${n}）` : '削除'; $('#delSel').disabled = !n; $('#buySel').hidden = !selMode; $('#buySel').disabled = !nd; $('#buySel').textContent = nd ? `買取価格を計算（${nd}点）` : 'チェックした商品の買取価格を計算'; }
+function updDel() { const ids = [...$('#jobs').querySelectorAll('input:checked')].map((i) => i.dataset.id); const n = ids.length, nd = ids.filter((id) => jobs.get(id)?.state === 'done').length; $('#delSel').hidden = !selMode; $('#delSel').textContent = n ? `削除（${n}）` : '削除'; $('#delSel').disabled = !n; $('#buySel').hidden = !selMode; $('#buySel').disabled = !nd; const all = $('#jobs').querySelectorAll('input[type=checkbox]'); $('#selBar').hidden = !selMode; $('#allSel').textContent = all.length && n === all.length ? '選択を解除' : '全て選択'; $('#redoSel').disabled = !n; $('#redoSel').textContent = n ? `再査定（${n}件）` : '再査定'; $('#buySel').textContent = nd ? `買取価格を計算（${nd}点）` : 'チェックした商品の買取価格を計算'; }
 dragSelect($('#jobs'), updDel);
+$('#allSel').onclick = () => { const all = [...$('#jobs').querySelectorAll('input[type=checkbox]')]; const on = !all.every((i) => i.checked); all.forEach((i) => (i.checked = on)); updDel(); };
+$('#redoSel').onclick = () => {
+  const list = [...$('#jobs').querySelectorAll('input:checked')].map((i) => jobs.get(i.dataset.id)).filter((j) => j && (j.state === 'done' || j.state === 'err'));
+  if (!list.length) return;
+  if (!ok) return toast('PCにつながっていません');
+  if (!confirm(`チェックした${list.length}件をもう一度査定しますか？\n（今の査定結果は、新しい結果に置き換わります）`)) return;
+  for (const j of list) { j.state = 'wait'; j.msg = 'もう一度査定します…'; j.error = ''; save(j); try { conn.send({ t: 'redo', id: j.id }); } catch {} }
+  toast(`${list.length}件を再査定します`);
+};
 $('#jobs').addEventListener('click', (e) => { if (e.target.closest('.ck')) return; const el = e.target.closest('.job'); if (el && !selMode) openSheet(el.dataset.id); });
 $('#queue').addEventListener('click', (e) => { const el = e.target.closest('.q'); if (el) openSheet(el.dataset.id); });
 $('#order').onclick = () => { order = order === 'new' ? 'done' : 'new'; ls.set('as_order', order); render(); };
