@@ -131,8 +131,9 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
 #sheet button.red{color:#d32f2f}#sheet button:last-child{border:0;color:#888}
 #sheetShade{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:50;display:none}
 #view{position:fixed;inset:0;background:#000;z-index:60;display:flex;flex-direction:column}
-#view .vb{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
-#view img,#view video{max-width:100%;max-height:100%}
+#view .vb{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;min-height:0}
+#view img,#view video{max-width:100%;max-height:100%;transform-origin:center;-webkit-user-select:none;user-select:none}
+#view .vtop{display:flex;justify-content:space-between;color:#fff;font-size:14px;padding:calc(env(safe-area-inset-top) + 10px) 16px 6px;min-height:20px}
 #view .vt{display:flex;gap:10px;padding:10px 12px calc(14px + env(safe-area-inset-bottom))}
 #view .vt button{flex:1;padding:12px;border-radius:10px;border:0;font-size:15px;background:#333;color:#fff}
 #view .vt button.p{background:#4f7cff}
@@ -221,7 +222,7 @@ body.menu #menu{transform:none}body.menu #shade{display:block}
     ・上の宛先をタップして送る相手を選び、🖼（写真・動画）📎（ファイル）または文字を送信します。<br>
     ・📸 はスキャナーのように使えます。撮影するとそのまま送信され、iPhoneの写真アプリには保存されません。比率（4:3・スクエア・16:9）とズーム（スライダー・2本指）が使えます。「高画質で撮る」はiPhone標準カメラの画質で撮影します。<br>
     ・📸 の画面の「ライブ配信」で、映像と音声を宛先（PC・他のiPhone・全員）にリアルタイムで送れます。🔄でインカメラに切り替え、「効果」でアニメ調などに加工できます。<br>
-    ・届いた写真や動画をタップすると大きく表示され、「保存」で写真アプリに保存できます。<br>
+    ・届いた写真や動画をタップすると大きく表示され、「保存」で写真アプリに保存できます。2本指やダブルタップで拡大、左右にスワイプで前後の画像に移れます。<br>
     ・メッセージを長押しすると、保存・コピー・削除ができます。まとめて届いた画像を1枚だけ削除するときは、その画像をタップして「削除」を押します。<br>
     ・相手の端末がオフラインでも、PCが預かって相手がオンラインになったときに自動で届けます（PCの画面が開いている必要があります）。<br>
     ・PCに接続されていない間に送ったものは「送信待ち」になり、接続したときに自動で送信されます。<br>
@@ -583,18 +584,51 @@ async function shareFiles(ms){
   if(navigator.canShare&&navigator.canShare({files})){try{await navigator.share({files})}catch(e){}}
   else files.forEach(f=>{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;a.click()});
 }
-function viewer(m,g){
+/* 画像ビューア：ピンチ・ダブルタップで拡大、拡大中はドラッグで移動、左右スワイプで前後の画像へ */
+async function viewer(m0,g0){
+  const list=(await all()).filter(x=>x.kind==='file'&&x.blob&&['image','video'].includes(kind(x.mime))).sort((a,b)=>(a.ts-b.ts)||(a.id<b.id?-1:1));
+  let idx=list.findIndex(x=>x.id===m0.id);if(idx<0){list.splice(0,list.length,m0);idx=0}
   const v=document.createElement('div');v.id='view';
-  const k=kind(m.mime),el=document.createElement(k==='video'?'video':'img');el.src=urlOf(m);
-  if(k==='video'){el.controls=true;el.playsInline=true;el.autoplay=true}
-  const box=document.createElement('div');box.className='vb';box.appendChild(el);
-  const t=document.createElement('div');t.className='vt';
-  const btn=(x,f,p)=>{const b=document.createElement('button');b.textContent=x;if(p)b.className='p';b.onclick=f;t.appendChild(b)};
-  btn('閉じる',()=>v.remove());
-  if(g.length>1)btn('すべて保存',()=>shareFiles(g));
-  btn('削除',async()=>{if(!confirm('この'+(k==='video'?'動画':'画像')+'を削除しますか？'))return;await del(m.id);v.remove();renderChat()});
-  btn('保存',()=>shareFiles([m]),true);
-  v.append(box,t);document.body.appendChild(v);
+  v.innerHTML='<div class="vtop"><span class="vcnt"></span><span class="vzm"></span></div><div class="vb"></div><div class="vt"></div>';
+  const box=v.querySelector('.vb'),t=v.querySelector('.vt');
+  let z=1,x=0,y=0,el=null,g=[];
+  const apply=()=>{if(el)el.style.transform='translate('+x+'px,'+y+'px) scale('+z+')';v.querySelector('.vzm').textContent=z>1.01?z.toFixed(1)+'倍':''};
+  const zoomAt=(nz,cx,cy)=>{nz=Math.min(6,Math.max(1,nz));const r=box.getBoundingClientRect(),ox=cx-(r.left+r.width/2),oy=cy-(r.top+r.height/2);x=ox-(ox-x)*(nz/z);y=oy-(oy-y)*(nz/z);z=nz;if(z<=1.01){z=1;x=0;y=0}apply()};
+  const btn=(s2,f,p)=>{const b=document.createElement('button');b.textContent=s2;if(p)b.className='p';b.onclick=f;t.appendChild(b)};
+  function show(n){
+    if(!list.length){v.remove();return}
+    idx=(n+list.length)%list.length;const m=list[idx],k=kind(m.mime);z=1;x=0;y=0;
+    box.innerHTML='';el=document.createElement(k==='video'?'video':'img');el.src=urlOf(m);
+    if(k==='video'){el.controls=true;el.playsInline=true;el.autoplay=true}
+    box.appendChild(el);apply();
+    v.querySelector('.vcnt').textContent=list.length>1?(idx+1)+' / '+list.length:'';
+    g=m.bid?list.filter(x2=>x2.bid===m.bid):[m];
+    t.innerHTML='';btn('閉じる',()=>v.remove());
+    if(g.length>1)btn('すべて保存',()=>shareFiles(g));
+    btn('削除',async()=>{if(!confirm('この'+(k==='video'?'動画':'画像')+'を削除しますか？'))return;await del(m.id);list.splice(idx,1);renderChat();if(list.length)show(idx);else v.remove()});
+    btn('保存',()=>shareFiles([m]),true);
+  }
+  let tch=null,lastTap=0;
+  box.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){const[a,b]=e.touches;tch={pinch:true,d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),z,cx:(a.clientX+b.clientX)/2,cy:(a.clientY+b.clientY)/2}}
+    else if(e.touches.length===1){const p=e.touches[0];tch={sx:p.clientX,sy:p.clientY,x,y,t:Date.now()}}
+  },{passive:true});
+  box.addEventListener('touchmove',e=>{
+    if(!tch)return;
+    if(tch.pinch&&e.touches.length===2){e.preventDefault();const[a,b]=e.touches;zoomAt(tch.z*Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/tch.d,tch.cx,tch.cy);tch.z=z;tch.d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);return}
+    if(!tch.pinch&&e.touches.length===1){const p=e.touches[0],dx=p.clientX-tch.sx,dy=p.clientY-tch.sy;
+      if(z>1.01){e.preventDefault();x=tch.x+dx;y=tch.y+dy;apply()}
+      else if(Math.abs(dx)>Math.abs(dy)){e.preventDefault();el.style.transform='translateX('+dx+'px)'}}
+  },{passive:false});
+  box.addEventListener('touchend',e=>{
+    if(!tch||e.touches.length)return;const c=tch;tch=null;if(c.pinch)return;
+    const p=e.changedTouches[0],dx=p.clientX-c.sx,dy=p.clientY-c.sy;
+    if(z<=1.01&&Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)){show(idx+(dx<0?1:-1));return}
+    if(z<=1.01)apply();
+    if(Math.abs(dx)<10&&Math.abs(dy)<10){const now=Date.now();if(now-lastTap<300){zoomAt(z>1.01?1:2.5,p.clientX,p.clientY);lastTap=0}else lastTap=now}
+  },{passive:true});
+  box.addEventListener('dblclick',e=>zoomAt(z>1.01?1:2.5,e.clientX,e.clientY));
+  document.body.appendChild(v);show(idx);
 }
 
 /* ---------- メニュー ---------- */
