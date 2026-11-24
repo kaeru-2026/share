@@ -133,6 +133,7 @@ textarea{min-height:64px;resize:vertical}
       <button id="selMode" class="ghost sm">選択</button>
       <button id="delSel" class="ghost sm danger" hidden>削除</button>
     </div>
+    <button id="buySel" class="big" hidden>買取価格を計算</button>
     <div id="jobs"></div>
   </section>
 </div>
@@ -143,6 +144,12 @@ textarea{min-height:64px;resize:vertical}
   <div class="body" id="sheetBody"></div>
 </div>
 
+<!-- 買取価格の計算 -->
+<div id="buySheet" class="sheet" hidden>
+  <div class="bar"><button id="buyBack" class="ghost sm">‹ 戻る</button><span class="sp"></span><b>買取価格の計算</b><span class="sp"></span></div>
+  <div class="body" id="buyBox"></div>
+</div>
+
 <!-- 設定 -->
 <div id="setSheet" class="sheet" hidden>
   <div class="bar"><button id="closeSet" class="ghost sm">‹ 戻る</button><span class="sp"></span><b>設定</b><span class="sp"></span></div>
@@ -151,6 +158,11 @@ textarea{min-height:64px;resize:vertical}
       <h2>この端末の名前</h2>
       <p class="hint">PCの画面に表示されます</p>
       <div style="display:flex;gap:6px"><input id="devName"><button id="saveName" class="sm">保存</button></div>
+    </div>
+    <div class="card">
+      <h2>査定結果の価格</h2>
+      <select id="basisSel"><option value="excl">送料別（ヤフオクの落札価格の基準）</option><option value="incl">送料込み（送料を足して表示）</option></select>
+      <p class="hint" id="costInfo"></p>
     </div>
     <div class="card">
       <h2>接続先のPC</h2>
@@ -285,6 +297,53 @@ textarea{min-height:64px;resize:vertical}
     ['used60', '傷や汚れあり'],
     ['used80', '全体的に状態が悪い']
   ];
+  // 発送サイズ
+  const SIZES = [['neko', 'ネコポス'], ['compact', '宅急便コンパクト'], ['s60', '60サイズ'], ['s80', '80サイズ'], ['s100', '100サイズ'], ['s120', '120サイズ'], ['s140', '140サイズ'], ['s160', '160サイズ'], ['s180', '180サイズ'], ['s200', '200サイズ']];
+  const SIZE_NAME = Object.fromEntries(SIZES);
+  const PLAT = { mercari: 'メルカリ', yahoo: 'ヤフオク' };
+  const SHIP_NAME = { mercari: 'らくらくメルカリ便', yahoo: 'おてがる配送（ヤマト）' };
+  // 初期値：2026年11月時点の公式料金（全国一律・出品者負担）。宅急便コンパクトは専用BOX 70円を含む
+  //   らくらくメルカリ便：jp-news.mercari.com/contents/1882
+  //   おてがる配送（ヤマト運輸）：auctions.yahoo.co.jp/topic/promo/yahuneko/guide/price.html
+  //   手数料：メルカリ 販売価格の10%／ヤフオク 落札価格の10%（2024年6月4日から一律）
+  const DEF_COST = {
+    basis: 'excl', inclVia: 'mercari',
+    platform: 'mercari', yahooShip: 'buyer',
+    fee: { mercari: 10, yahoo: 10 },
+    ship: {
+      mercari: { neko: 210, compact: 520, s60: 750, s80: 850, s100: 1050, s120: 1200, s140: 1450, s160: 1700, s180: 2100, s200: 2500 },
+      yahoo: { neko: 210, compact: 560, s60: 750, s80: 850, s100: 1050, s120: 1200, s140: 1400, s160: 1700, s180: 2100, s200: 2500 }
+    },
+    pack: 100, other: 0,
+    profitMode: 'rate', profitRate: 30, profitYen: 1000, minProfit: 500,
+    priceCol: 'price', round: 100
+  };
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  function mergeCfg(c) {
+    const d = clone(DEF_COST);
+    if (!c || typeof c !== 'object') return d;
+    for (const k of Object.keys(d)) {
+      if (c[k] == null) continue;
+      if (k === 'fee') d.fee = { ...d.fee, ...c.fee };
+      else if (k === 'ship') { d.ship.mercari = { ...d.ship.mercari, ...(c.ship?.mercari || {}) }; d.ship.yahoo = { ...d.ship.yahoo, ...(c.ship?.yahoo || {}) }; }
+      else d[k] = c[k];
+    }
+    return d;
+  }
+  let CFG = clone(DEF_COST);
+  const setCfg = (c) => { CFG = mergeCfg(c); };
+  function sizeKey(t) {
+    const s = String(t || '').replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+    if (!s) return '';
+    if (/ネコポス|ゆうパケット|メール便|薄型/.test(s)) return 'neko';
+    if (/コンパクト/.test(s)) return 'compact';
+    const n = +(s.match(/\d{2,3}/) || [])[0];
+    if (!n) return '';
+    for (const x of [60, 80, 100, 120, 140, 160, 180, 200]) if (n <= x) return 's' + x;
+    return 's200';
+  }
+  const shipYen = (plat, size, cfg = CFG) => (size ? +cfg.ship?.[plat]?.[size] || 0 : 0);
+
   const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const yen = (n) => (n > 0 ? Math.round(n).toLocaleString('ja-JP') + '円' : '—');
   const list = (a) => (Array.isArray(a) ? a : a ? [a] : []).map((x) => String(x ?? '').trim()).filter(Boolean);
@@ -343,6 +402,12 @@ textarea{min-height:64px;resize:vertical}
     const p = r.product || {}, c = r.condition || {}, f = r.final || {}, mk = r.market || {};
     const rec = f.recommend || {};
     const myKey = c.key || '';
+    const size = r.ship?.size || '';
+    const add = CFG.basis === 'incl' ? shipYen(CFG.inclVia, size) : 0;
+    const yp = (n) => (n > 0 ? yen(n + add) : '—'); // 設定に合わせた価格（送料込みなら送料を足す）
+    const basisNote = CFG.basis === 'incl'
+      ? (add ? `価格はすべて送料込み（${SHIP_NAME[CFG.inclVia]}・${SIZE_NAME[size]}の送料 ${yen(add)}を含む）です。` : '発送サイズが分からないため、送料別のまま表示しています。')
+      : '価格はすべて送料別（ヤフオクの落札価格と同じ基準）です。';
     const confCls = /高/.test(p.confidence) ? 'g' : /低/.test(p.confidence) ? 'r' : 'o';
     let h = '<div class="sv">';
 
@@ -356,11 +421,12 @@ textarea{min-height:64px;resize:vertical}
 
     // おすすめ価格
     if (rec.price) {
-      let b = `<div class="sv-price"><div class="sv-big"><small>おすすめ出品価格${rec.condition ? `（${esc(rec.condition)}）` : ''}</small>${yen(rec.price)}</div>`;
-      if (rec.quick) b += `<div class="sv-mini">早く売るなら<br><b>${yen(rec.quick)}</b></div>`;
-      if (rec.max) b += `<div class="sv-mini">強気なら<br><b>${yen(rec.max)}</b></div>`;
-      if (rec.start) b += `<div class="sv-mini">ヤフオク開始価格<br><b>${yen(rec.start)}</b></div>`;
-      b += '</div><p class="sv-note">価格はすべて送料別（ヤフオクの落札価格と同じ基準）です。メルカリで送料込みにする場合は、送料分を上乗せしてください。</p>';
+      let b = `<div class="sv-price"><div class="sv-big"><small>おすすめ出品価格${rec.condition ? `（${esc(rec.condition)}）` : ''}</small>${yp(rec.price)}</div>`;
+      if (rec.quick) b += `<div class="sv-mini">早く売るなら<br><b>${yp(rec.quick)}</b></div>`;
+      if (rec.max) b += `<div class="sv-mini">強気なら<br><b>${yp(rec.max)}</b></div>`;
+      if (rec.start) b += `<div class="sv-mini">ヤフオク開始価格<br><b>${yp(rec.start)}</b></div>`;
+      b += `</div><p class="sv-note"><b>${CFG.basis === 'incl' && add ? '送料込み' : '送料別'}</b>　${basisNote}</p>`;
+      if (size) b += `<p class="sv-note">発送サイズの目安：${esc(SIZE_NAME[size])}${r.ship?.weight ? `（${esc(r.ship.weight)}）` : ''}　送料 らくらくメルカリ便 ${yen(shipYen('mercari', size))}／おてがる配送 ${yen(shipYen('yahoo', size))}</p>`;
       if (rec.reason) b += `<p class="sv-note" style="color:#333;font-size:13px">${esc(rec.reason)}</p>`;
       h += sec('価格', b);
     }
@@ -373,15 +439,15 @@ textarea{min-height:64px;resize:vertical}
         const row = f.table[k] || {};
         const cnt = mk.counts?.[k] || 0;
         t += `<tr class="${k === myKey ? 'me' : ''}"><td>${esc(label)}${k === myKey ? ' ◀' : ''}</td>`;
-        t += `<td><span class="mid">${yen(row.mid)}</span>${row.low && row.high ? `<span class="rg">${yen(row.low)}〜${yen(row.high)}</span>` : ''}</td>`;
+        t += `<td><span class="mid">${yp(row.mid)}</span>${row.low && row.high ? `<span class="rg">${yp(row.low)}〜${yp(row.high)}</span>` : ''}</td>`;
         if (!aiOnly) {
-          t += `<td>${row.mkt ? yen(row.mkt) : '—'}${cnt ? `<span class="rg">${cnt}件</span>` : ''}</td>`;
-          t += `<td>${row.ai ? yen(row.ai) : '—'}</td>`;
+          t += `<td>${row.mkt ? yp(row.mkt) : '—'}${cnt ? `<span class="rg">${cnt}件</span>` : ''}</td>`;
+          t += `<td>${row.ai ? yp(row.ai) : '—'}</td>`;
         }
         t += '</tr>';
       }
       t += '</tbody></table>';
-      const notes = [];
+      const notes = [basisNote];
       if (aiOnly) notes.push('相場検索オフ：ヤフオク・メルカリは調べず、AIの知識だけで推定した価格です。');
       else if (mk.ok) notes.push(`「売れた実績」は ${[mk.yahooN ? `ヤフオク落札（過去180日）${mk.yahooN}件` : '', mk.mercariN ? `メルカリ売り切れ${mk.mercariN}件` : ''].filter(Boolean).join('・')} から、部品・まとめ売り・極端な値を除いて計算（メルカリは送料込みのため1割引で換算）。件数が少ない状態は、ほかの状態の価格から比率で計算しています。`);
       else notes.push(`売れた実績を取得できなかったため、AIの推定だけで作っています${mk.error ? `（${esc(mk.error)}）` : ''}。`);
@@ -419,7 +485,7 @@ textarea{min-height:64px;resize:vertical}
         const tt = s.url ? `<a class="t" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>` : `<span class="t">${esc(s.title)}</span>`;
         return `<li${i >= 8 ? ' class="sv-hide" hidden' : ''}><span class="sv-src ${cls}">${esc(s.src)}</span><span class="p">${yen(s.price)}</span>${tt}${s.cond ? `<span class="sv-src">${esc(s.cond)}</span>` : ''}</li>`;
       }).join('');
-      h += sec(`売れた実績（${smp.length}件）`, `<ul class="sv-smp">${li}</ul>${smp.length > 8 ? '<button class="sv-more" onclick="this.previousElementSibling.querySelectorAll(\'.sv-hide\').forEach(e=>e.hidden=false);this.remove()">すべて表示</button>' : ''}`);
+      h += sec(`売れた実績（${smp.length}件）`, `<p class="sv-note" style="margin:0 0 4px">実際に売れた価格そのままです（ヤフオクは送料別、メルカリは送料込みが基本）。</p><ul class="sv-smp">${li}</ul>${smp.length > 8 ? '<button class="sv-more" onclick="this.previousElementSibling.querySelectorAll(\'.sv-hide\').forEach(e=>e.hidden=false);this.remove()">すべて表示</button>' : ''}`);
     }
 
     h += sec('売るときのアドバイス', ul(f.advice));
@@ -430,13 +496,140 @@ textarea{min-height:64px;resize:vertical}
     return h + '</div>';
   }
 
+  // ---------------- 買取価格の計算 ----------------
+  // item: { id, name, cond, thumb, rec:{price,quick,max}, size, buy:{plat, price, size} }
+  function calcBuy(it, cfg, o) {
+    const plat = it.buy?.plat || cfg.platform;
+    const size = it.buy?.size || it.size || 's60';
+    const base = +it.rec?.[o.priceCol] || +it.rec?.price || 0;
+    const P = Math.max(0, Math.round(it.buy?.price != null && it.buy.price !== '' ? +it.buy.price : base)); // 送料別の販売価格
+    const ship = shipYen(plat, size, cfg);
+    const sellerShip = plat === 'mercari' || cfg.yahooShip === 'seller';
+    const L = P + (sellerShip ? ship : 0);                 // 出品価格（出品者が送料を払うなら送料を足す）
+    const fee = Math.floor(L * (+cfg.fee[plat] || 0) / 100);
+    const shipCost = sellerShip ? ship : 0;
+    const cost = (+cfg.pack || 0) + (+cfg.other || 0);
+    const net = L - fee - shipCost - cost;                 // 手取り
+    const target = o.profitMode === 'yen' ? +o.profitYen || 0 : Math.max(Math.round(L * (+o.profitRate || 0) / 100), +o.minProfit || 0);
+    const unit = +o.round || 1;
+    const buy = Math.max(0, Math.floor((net - target) / unit) * unit);
+    const profit = net - buy;
+    return { plat, size, P, L, fee, shipCost, cost, net, target, buy, profit, rate: L ? Math.round(profit / L * 1000) / 10 : 0, sellerShip };
+  }
+  const BUY_CSS = `
+.bc{font-size:13px;color:#222}
+.bc .bh{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:flex-end;margin-bottom:10px}
+.bc .bh label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#666}
+.bc select,.bc input{font:inherit;font-size:13px;border:1px solid #d0d7e2;border-radius:8px;padding:5px 6px;background:#fff;color:#222}
+.bc input.n{width:84px;text-align:right}
+.bc td select[data-k="plat"]{min-width:96px}
+.bc .tw{overflow-x:auto}
+.bc table{border-collapse:collapse;width:100%;min-width:900px}
+.bc th,.bc td{border-bottom:1px solid #eee;padding:6px 5px;text-align:right;white-space:nowrap;vertical-align:middle}
+.bc th{font-size:11px;color:#777;font-weight:600}
+.bc td.nm{text-align:left;white-space:normal;min-width:180px}
+.bc td.nm img{width:36px;height:36px;object-fit:cover;border-radius:6px;float:left;margin-right:6px}
+.bc td.nm small{color:#888;display:block}
+.bc .buy{font-size:16px;font-weight:700;color:#137333}
+.bc .neg{color:#b3261e}
+.bc tfoot td{font-weight:700;border-top:2px solid #ccc;border-bottom:0}
+.bc .sum{display:flex;flex-wrap:wrap;gap:6px 18px;background:#f4f8f4;border-radius:10px;padding:10px 12px;margin:10px 0}
+.bc .sum div{font-size:12px;color:#555}.bc .sum b{display:block;font-size:17px;color:#222}
+.bc .sum .g b{color:#137333;font-size:20px}
+.bc .note{font-size:11px;color:#777;line-height:1.6;margin-top:8px}
+.bc .cards .cd{border:1px solid #e6e6e6;border-radius:12px;padding:10px;margin-bottom:8px;background:#fff}
+.bc .cards .t{display:flex;gap:8px;align-items:center}
+.bc .cards .t img{width:44px;height:44px;object-fit:cover;border-radius:8px;flex:none}
+.bc .cards .t b{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bc .cards .f{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:8px 0}
+.bc .cards .f label{font-size:11px;color:#777;display:flex;flex-direction:column;gap:2px}
+.bc .cards .f input,.bc .cards .f select{width:100%;font-size:16px}
+.bc .cards .r{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 8px;font-size:12px;color:#555}
+.bc .cards .r b{color:#222}
+.bc .cards .bb{display:flex;justify-content:space-between;align-items:baseline;border-top:1px dashed #ddd;margin-top:6px;padding-top:6px}
+`;
+  // 買取計算の画面を box に作る。onSave(id, buy) で商品ごとの変更（販売先・販売価格・サイズ）を保存
+  function openBuy(box, items, cfg, { mobile = false, onSave } = {}) {
+    if (!document.getElementById('bc-css')) { const st = document.createElement('style'); st.id = 'bc-css'; st.textContent = BUY_CSS; document.head.appendChild(st); }
+    cfg = mergeCfg(cfg);
+    const o = { priceCol: cfg.priceCol, profitMode: cfg.profitMode, profitRate: cfg.profitRate, profitYen: cfg.profitYen, minProfit: cfg.minProfit, round: cfg.round };
+    const opt = (list, v) => list.map(([k, t]) => `<option value="${k}"${String(k) === String(v) ? ' selected' : ''}>${t}</option>`).join('');
+    const PCOL = [['price', 'おすすめ価格'], ['quick', '早く売る価格'], ['max', '強気の価格']];
+    const head = () => `<div class="bh">
+      <label>販売価格の基準<select data-o="priceCol">${opt(PCOL, o.priceCol)}</select></label>
+      <label>目標利益<select data-o="profitMode">${opt([['rate', '販売価格の％'], ['yen', '1点あたりの金額']], o.profitMode)}</select></label>
+      ${o.profitMode === 'rate' ? `<label>利益率（％）<input class="n" type="number" inputmode="numeric" data-o="profitRate" value="${o.profitRate}"></label><label>最低利益（円）<input class="n" type="number" inputmode="numeric" data-o="minProfit" value="${o.minProfit}"></label>` : `<label>利益（円）<input class="n" type="number" inputmode="numeric" data-o="profitYen" value="${o.profitYen}"></label>`}
+      <label>端数の切り捨て<select data-o="round">${opt([['1', '1円'], ['10', '10円'], ['100', '100円'], ['1000', '1,000円']], o.round)}</select></label>
+      <span style="flex:1"></span><button type="button" class="bcopy" style="font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid #d0d7e2;background:#fff;color:#1a73e8">表をコピー</button></div>`;
+    const ctl = (it, r) => ({
+      plat: `<select data-i="${esc(it.id)}" data-k="plat">${opt(Object.entries(PLAT), r.plat)}</select>`,
+      price: `<input class="n" type="number" inputmode="numeric" data-i="${esc(it.id)}" data-k="price" value="${r.P}">`,
+      size: `<select data-i="${esc(it.id)}" data-k="size">${opt(SIZES, r.size)}</select>`
+    });
+    let rows = [], T = {};
+    function draw(keep) {
+      rows = items.map((it) => [it, calcBuy(it, cfg, o)]);
+      T = rows.reduce((a, [, r]) => { for (const k of ['L', 'fee', 'shipCost', 'cost', 'net', 'buy', 'profit']) a[k] += r[k]; return a; }, { L: 0, fee: 0, shipCost: 0, cost: 0, net: 0, buy: 0, profit: 0 });
+      const neg = (r) => (r.net - r.target < 0 ? ' neg' : '');
+      let h = head();
+      h += `<div class="sum"><div class="g">買取価格の合計<b>${yen(T.buy)}</b></div><div>販売見込みの合計<b>${yen(T.L)}</b></div><div>手数料<b>${yen(T.fee)}</b></div><div>送料<b>${yen(T.shipCost)}</b></div><div>梱包・経費<b>${yen(T.cost)}</b></div><div>利益の合計<b>${yen(T.profit)}</b></div><div>利益率<b>${T.L ? Math.round(T.profit / T.L * 1000) / 10 : 0}%</b></div><div>点数<b>${items.length}点</b></div></div>`;
+      if (mobile) {
+        h += '<div class="cards">' + rows.map(([it, r]) => { const c = ctl(it, r); return `<div class="cd"><div class="t"><img src="${esc(it.thumb || '')}" alt=""><b>${esc(it.name)}</b></div>
+          <div class="f"><label>販売先${c.plat}</label><label>販売価格（送料別）${c.price}</label><label>発送サイズ${c.size}</label></div>
+          <div class="r"><span>出品価格<br><b>${yen(r.L)}</b></span><span>手数料<br><b>${yen(r.fee)}</b></span><span>送料<br><b>${r.sellerShip ? yen(r.shipCost) : '落札者負担'}</b></span><span>梱包・経費<br><b>${yen(r.cost)}</b></span><span>手取り<br><b>${yen(r.net)}</b></span><span>目標利益<br><b>${yen(r.target)}</b></span></div>
+          <div class="bb"><span>買取価格</span><span class="buy${neg(r)}" data-buy="${esc(it.id)}">${yen(r.buy)}</span><span style="font-size:12px;color:#555">利益 ${yen(r.profit)}（${r.rate}%）</span></div></div>`; }).join('') + '</div>';
+      } else {
+        h += `<div class="tw"><table><thead><tr><th style="text-align:left">商品</th><th>販売先</th><th>販売価格<br>（送料別）</th><th>発送サイズ</th><th>出品価格</th><th>手数料</th><th>送料</th><th>梱包・経費</th><th>手取り</th><th>目標利益</th><th>買取価格</th><th>利益（率）</th></tr></thead><tbody>`;
+        h += rows.map(([it, r]) => { const c = ctl(it, r); return `<tr><td class="nm"><img src="${esc(it.thumb || '')}" alt="">${esc(it.name)}<small>${esc(it.cond || '')}</small></td><td>${c.plat}</td><td>${c.price}</td><td>${c.size}</td>
+          <td>${yen(r.L)}</td><td>${yen(r.fee)}</td><td>${r.sellerShip ? yen(r.shipCost) : '落札者負担'}</td><td>${yen(r.cost)}</td><td>${yen(r.net)}</td><td>${yen(r.target)}</td><td class="buy${neg(r)}">${yen(r.buy)}</td><td>${yen(r.profit)}（${r.rate}%）</td></tr>`; }).join('');
+        h += `</tbody><tfoot><tr><td style="text-align:left">合計 ${items.length}点</td><td></td><td></td><td></td><td>${yen(T.L)}</td><td>${yen(T.fee)}</td><td>${yen(T.shipCost)}</td><td>${yen(T.cost)}</td><td>${yen(T.net)}</td><td></td><td class="buy">${yen(T.buy)}</td><td>${yen(T.profit)}</td></tr></tfoot></table></div>`;
+      }
+      h += `<p class="note">計算のしかた：出品価格＝販売価格（送料別）＋送料（メルカリ、またはヤフオクで出品者が送料を払うとき）／手取り＝出品価格−手数料（メルカリ${cfg.fee.mercari}%・ヤフオク${cfg.fee.yahoo}%、1円未満切り捨て）−送料−梱包・経費（1点 ${yen((+cfg.pack || 0) + (+cfg.other || 0))}）／買取価格＝手取り−目標利益（${o.profitMode === 'yen' ? `1点 ${yen(o.profitYen)}` : `出品価格の${o.profitRate}%、最低 ${yen(o.minProfit)}`}）を${Number(o.round).toLocaleString('ja-JP')}円未満切り捨て。ヤフオクは送料${cfg.yahooShip === 'seller' ? '出品者負担' : '落札者負担'}で計算。送料はらくらくメルカリ便・おてがる配送（ヤマト）の全国一律料金です（PCの設定で変更できます）。赤い買取価格は、目標利益を確保できない商品です。</p>`;
+      box.innerHTML = `<div class="bc">${h}</div>`;
+      if (keep) { const el = box.querySelector(keep); if (el) { el.focus(); try { const v = el.value; el.value = ''; el.value = v; } catch {} } }
+      box.querySelector('.bcopy').onclick = copy;
+    }
+    function copy() {
+      const L = [['商品', '状態', '販売先', '販売価格(送料別)', '発送サイズ', '出品価格', '手数料', '送料', '梱包・経費', '手取り', '目標利益', '買取価格', '利益', '利益率'].join('\t')];
+      rows.forEach(([it, r]) => L.push([it.name, it.cond || '', PLAT[r.plat], r.P, SIZE_NAME[r.size], r.L, r.fee, r.shipCost, r.cost, r.net, r.target, r.buy, r.profit, r.rate + '%'].join('\t')));
+      L.push(['合計', '', '', '', '', T.L, T.fee, T.shipCost, T.cost, T.net, '', T.buy, T.profit, ''].join('\t'));
+      const t = L.join('\n');
+      const done = () => { const b = box.querySelector('.bcopy'); if (b) { b.textContent = 'コピーしました'; setTimeout(() => (b.textContent = '表をコピー'), 1500); } };
+      const fallback = () => { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch {} ta.remove(); };
+      if (navigator.clipboard?.writeText) navigator.clipboard.writeText(t).then(done, fallback); else fallback();
+    }
+    // 数字の入力中は少し待ってから計算し直す（入力欄はそのまま）
+    const onInput = (e) => {
+      const t = e.target;
+      if (t.dataset.o) {
+        o[t.dataset.o] = t.dataset.o === 'priceCol' || t.dataset.o === 'profitMode' ? t.value : +t.value;
+        // 基準を変えたら、手で直した販売価格は基準の価格に戻す
+        if (t.dataset.o === 'priceCol') items.forEach((it) => { if (it.buy && it.buy.price !== undefined) { delete it.buy.price; onSave?.(it.id, it.buy); } });
+        if (t.tagName === 'SELECT') draw();
+        else { clearTimeout(draw.tm); draw.tm = setTimeout(() => draw(`[data-o="${t.dataset.o}"]`), 700); }
+        return;
+      }
+      if (t.dataset.i) {
+        const it = items.find((x) => x.id === t.dataset.i);
+        if (!it) return;
+        it.buy = { ...(it.buy || {}), [t.dataset.k]: t.dataset.k === 'price' ? (t.value === '' ? '' : Math.max(0, +t.value || 0)) : t.value };
+        onSave?.(it.id, it.buy);
+        if (t.tagName === 'SELECT') draw();
+        else { clearTimeout(draw.tm); draw.tm = setTimeout(() => draw(`[data-i="${CSS.escape(it.id)}"][data-k="price"]`), 700); }
+      }
+    };
+    box.oninput = (e) => { if (e.target.tagName === 'INPUT') onInput(e); };
+    box.onchange = (e) => { if (e.target.tagName === 'SELECT') onInput(e); };
+    draw();
+  }
+
   // 一覧用の短い要約
   function summary(r) {
     const rec = r?.final?.recommend || {};
     return { name: r?.product?.name || '', price: rec.price || 0, cond: r?.condition?.label || '' };
   }
 
-  (typeof window !== 'undefined' ? window : globalThis).SateiView = { COND, esc, yen, render, summary, fmtDate };
+  (typeof window !== 'undefined' ? window : globalThis).SateiView = { COND, esc, yen, render, summary, fmtDate, SIZES, SIZE_NAME, PLAT, DEF_COST, mergeCfg, setCfg, sizeKey, shipYen, calcBuy, openBuy, getCfg: () => CFG };
 })();
 </script>
 <script>
@@ -533,6 +726,7 @@ async function onData(d) {
       for (const j of jobs.values()) if (j.state === 'sending') j.state = 'unsent';
       flush();
       break;
+    case 'cfg': ls.set('as_cfg', d.cfg); applyCfg(); break;
     case 'ack': { const j = jobs.get(d.id); if (j && j.state === 'sending') { j.state = 'wait'; j.msg = 'PCが受け取りました'; save(j); } break; }
     case 'missing': { const j = jobs.get(d.id); if (j && j.state !== 'done') { j.state = 'unsent'; save(j); flush(); } break; }
     case 'status': { const j = jobs.get(d.id); if (j && j.state !== 'done') { j.state = d.stage === 'wait' ? 'wait' : 'run'; j.msg = String(d.msg || ''); save(j, true); } break; }
@@ -800,7 +994,7 @@ function updateRow(j) {
   }
   render();
 }
-function updDel() { const n = $('#jobs').querySelectorAll('input:checked').length; $('#delSel').hidden = !selMode; $('#delSel').textContent = n ? `削除（${n}）` : '削除'; $('#delSel').disabled = !n; }
+function updDel() { const ids = [...$('#jobs').querySelectorAll('input:checked')].map((i) => i.dataset.id); const n = ids.length, nd = ids.filter((id) => jobs.get(id)?.state === 'done').length; $('#delSel').hidden = !selMode; $('#delSel').textContent = n ? `削除（${n}）` : '削除'; $('#delSel').disabled = !n; $('#buySel').hidden = !selMode; $('#buySel').disabled = !nd; $('#buySel').textContent = nd ? `買取価格を計算（${nd}点）` : 'チェックした商品の買取価格を計算'; }
 dragSelect($('#jobs'), updDel);
 $('#jobs').addEventListener('click', (e) => { if (e.target.closest('.ck')) return; const el = e.target.closest('.job'); if (el && !selMode) openSheet(el.dataset.id); });
 $('#queue').addEventListener('click', (e) => { const el = e.target.closest('.q'); if (el) openSheet(el.dataset.id); });
@@ -849,6 +1043,33 @@ function closeSheet() { openId = ''; $('#sheet').hidden = true; document.body.st
 $('#back').onclick = closeSheet;
 $('#openSet').onclick = () => { $('#setSheet').hidden = false; document.body.style.overflow = 'hidden'; };
 $('#closeSet').onclick = () => { $('#setSheet').hidden = true; document.body.style.overflow = ''; };
+
+
+// ---------------- 価格の表示（送料込み／送料別）と買取計算 ----------------
+function applyCfg() {
+  SateiView.setCfg(ls.get('as_cfg'));
+  const c = SateiView.getCfg();
+  $('#basisSel').value = c.basis;
+  $('#costInfo').textContent = `買取計算：手数料 メルカリ${c.fee.mercari}%・ヤフオク${c.fee.yahoo}%／梱包・経費 1点${(+c.pack || 0) + (+c.other || 0)}円／目標利益 ${c.profitMode === 'yen' ? `1点${c.profitYen}円` : `${c.profitRate}%（最低${c.minProfit}円）`}。送料表などの細かい設定はPCの「⚙ 設定」で変更します。`;
+  if (openId) renderSheet();
+}
+$('#basisSel').onchange = () => {
+  const c = ls.get('as_cfg') || {};
+  c.basis = $('#basisSel').value;
+  ls.set('as_cfg', c); applyCfg();
+  if (ok) try { conn.send({ t: 'cfgSet', basis: c.basis }); } catch {}
+  toast(c.basis === 'incl' ? '送料込みで表示します' : '送料別で表示します');
+};
+applyCfg();
+$('#buySel').onclick = () => {
+  const list = [...$('#jobs').querySelectorAll('input:checked')].map((i) => jobs.get(i.dataset.id)).filter((j) => j?.state === 'done');
+  if (!list.length) return;
+  const items = list.map((j) => ({ id: j.id, name: j.result?.product?.name || '商品名不明', cond: j.result?.condition?.label || '', thumb: j.thumb, rec: j.result?.final?.recommend || {}, size: j.result?.ship?.size || '', buy: j.buy ? { ...j.buy } : undefined }));
+  SateiView.openBuy($('#buyBox'), items, SateiView.getCfg(), { mobile: true, onSave: (id, b) => { const j = jobs.get(id); if (j) { j.buy = b; db.put(j); } } });
+  $('#buySheet').hidden = false; $('#buySheet').scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+};
+$('#buyBack').onclick = () => { $('#buySheet').hidden = true; document.body.style.overflow = ''; };
 
 // ---------------- 端末の設定 ----------------
 $('#devName').value = me.name;
