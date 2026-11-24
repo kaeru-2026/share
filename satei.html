@@ -80,6 +80,23 @@ textarea{min-height:64px;resize:vertical}
 .q img{width:48px;height:48px;border-radius:10px;object-fit:cover;background:#eee;flex:none}
 .q .tx{flex:1;min-width:0}.q .t1{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.q .t2{font-size:12px;color:#777}
 .job .no{font-size:11px;color:#999;min-width:1.8em;text-align:right}
+.camv{position:fixed;inset:0;z-index:40;background:#000;display:flex;flex-direction:column;color:#fff}
+.camv video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
+.camv .ct{display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px}
+.camv .ct b{font-size:15px}
+.camv .cb{padding:8px 12px calc(14px + env(safe-area-inset-bottom))}
+.camv .strip{display:flex;gap:6px;overflow-x:auto;min-height:58px;margin-bottom:10px}
+.camv .strip .s{position:relative;flex:none}
+.camv .strip img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:2px solid rgba(255,255,255,.6)}
+.camv .strip .x{position:absolute;top:-4px;right:-4px;width:20px;height:20px;padding:0;border-radius:50%;background:#e53935;font-size:12px;line-height:20px}
+.camv .row3{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px}
+.camv .shut{width:76px;height:76px;border-radius:50%;background:#fff;border:5px solid rgba(255,255,255,.45);background-clip:padding-box;padding:0}
+.camv .shut:active{transform:scale(.92)}
+.camv .cbtn{background:rgba(255,255,255,.16);color:#fff;font-size:14px;padding:10px 8px}
+.camv .done{background:#1a73e8}
+.camv .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
+.camv .flash.on{opacity:.7;transition:none}
+.camv .cmsg{font-size:12px;opacity:.8;text-align:center;margin-top:8px}
 </style>
 </head>
 <body>
@@ -142,8 +159,22 @@ textarea{min-height:64px;resize:vertical}
     </div>
     <div class="card">
       <h2>使い方のヒント</h2>
-      <p class="hint">・ホーム画面に追加すると、アプリのように開けます（共有ボタン →「ホーム画面に追加」）。<br>・商品ごとに「商品を追加」で枠を増やし、まとめて送ると、PCが1件ずつ順番に査定します。<br>・この画面を閉じても、PCは査定を続けます。次に開いたときに結果が届きます。</p>
+      <p class="hint">・ホーム画面に追加すると、アプリのように開けます（共有ボタン →「ホーム画面に追加」）。<br>・「撮影する」では続けて何枚でも撮れます。「次の商品へ」を押すと、そのまま次の商品の撮影に移れます。<br>・商品ごとに「商品を追加」で枠を増やし、まとめて送ると、PCが1件ずつ順番に査定します。<br>・この画面を閉じても、PCは査定を続けます。次に開いたときに結果が届きます。</p>
     </div>
+  </div>
+</div>
+<!-- 連続撮影 -->
+<div id="camv" class="camv" hidden>
+  <div class="ct"><button id="camClose" class="cbtn" style="padding:8px 12px">✕ やめる</button><span class="sp"></span><b id="camTitle"></b><span class="sp"></span><span id="camCount" style="min-width:60px;text-align:right"></span></div>
+  <div style="position:relative;flex:1;min-height:0;display:flex"><video id="camVideo" playsinline muted autoplay></video><div id="camFlash" class="flash"></div></div>
+  <div class="cb">
+    <div id="camStrip" class="strip"></div>
+    <div class="row3">
+      <button id="camNext" class="cbtn">次の商品へ ›</button>
+      <button id="camShut" class="shut" aria-label="撮影"></button>
+      <button id="camDone" class="cbtn done">完了</button>
+    </div>
+    <p class="cmsg">続けてシャッターを押すと、何枚でも撮れます（1商品10枚まで）</p>
   </div>
 </div>
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
@@ -329,7 +360,7 @@ textarea{min-height:64px;resize:vertical}
       if (rec.quick) b += `<div class="sv-mini">早く売るなら<br><b>${yen(rec.quick)}</b></div>`;
       if (rec.max) b += `<div class="sv-mini">強気なら<br><b>${yen(rec.max)}</b></div>`;
       if (rec.start) b += `<div class="sv-mini">ヤフオク開始価格<br><b>${yen(rec.start)}</b></div>`;
-      b += '</div>';
+      b += '</div><p class="sv-note">価格はすべて送料別（ヤフオクの落札価格と同じ基準）です。メルカリで送料込みにする場合は、送料分を上乗せしてください。</p>';
       if (rec.reason) b += `<p class="sv-note" style="color:#333;font-size:13px">${esc(rec.reason)}</p>`;
       h += sec('価格', b);
     }
@@ -600,7 +631,7 @@ function renderDrafts() {
 $('#drafts').addEventListener('click', async (e) => {
   const t = e.target.closest('[data-cam],[data-lib],[data-x],[data-w],[data-rm]');
   if (!t) return;
-  if (t.dataset.cam) { pickFor = t.dataset.cam; $('#cam').click(); return; }
+  if (t.dataset.cam) { openCamera(t.dataset.cam); return; }
   if (t.dataset.lib) { pickFor = t.dataset.lib; $('#lib').click(); return; }
   if (t.dataset.x) { const [id, k] = t.dataset.x.split(':'); const d = jobs.get(id); d.images.splice(+k, 1); await db.put(d); renderDrafts(); return; }
   if (t.dataset.w) { const [id, k] = t.dataset.w.split(':'); const d = jobs.get(id); d.work = k; await db.put(d); renderDrafts(); return; }
@@ -641,6 +672,82 @@ $('#send').onclick = async () => {
   toast(ok ? `${list.length}件をPCへ送りました。順番に査定します` : 'PCにつながったら自動で送ります');
   flush();
   $('#queue').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+
+// ---------------- 連続撮影（ページの中のカメラ。使えないときは標準のカメラ） ----------------
+let camStream = null, camShots = [], camDraft = null;
+const camUrls = new Map();
+async function openCamera(draftId) {
+  camDraft = jobs.get(draftId);
+  camShots = [];
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2880 } } });
+  } catch (e) {
+    camStream = null;
+    toast('カメラを使えないため、標準のカメラで撮影します（1枚ずつ）');
+    pickFor = draftId; $('#cam').click();
+    return;
+  }
+  const v = $('#camVideo');
+  v.srcObject = camStream;
+  try { await v.play(); } catch {}
+  $('#camv').hidden = false;
+  document.body.style.overflow = 'hidden';
+  drawCam();
+}
+function camTitle() { const i = draftList().findIndex((d) => d.id === camDraft?.id); return `商品 ${i + 1}`; }
+function drawCam() {
+  const have = camDraft ? camDraft.images.length : 0;
+  $('#camTitle').textContent = camTitle();
+  $('#camCount').textContent = `${have + camShots.length}/10枚`;
+  $('#camStrip').innerHTML = camShots.map((b, i) => { if (!camUrls.has(b)) camUrls.set(b, URL.createObjectURL(b)); return `<div class="s"><img src="${camUrls.get(b)}" alt=""><button class="x" data-i="${i}">×</button></div>`; }).join('');
+  $('#camStrip').scrollLeft = 1e6;
+  $('#camShut').disabled = have + camShots.length >= 10;
+  $('#camDone').textContent = camShots.length ? `完了（${camShots.length}枚）` : '完了';
+}
+$('#camStrip').onclick = (e) => { const b = e.target.closest('.x'); if (!b) return; const s = camShots.splice(+b.dataset.i, 1)[0]; URL.revokeObjectURL(camUrls.get(s)); camUrls.delete(s); drawCam(); };
+$('#camShut').onclick = async () => {
+  const v = $('#camVideo');
+  if (!v.videoWidth) return;
+  if ((camDraft?.images.length || 0) + camShots.length >= 10) return toast('1つの商品の写真は10枚までです。「次の商品へ」で続けて撮れます');
+  const f = $('#camFlash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
+  const s = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(v.videoWidth * s); c.height = Math.round(v.videoHeight * s);
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  const b = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.88));
+  if (b) camShots.push(b);
+  drawCam();
+};
+async function saveShots() {
+  if (!camDraft || !camShots.length) return;
+  if (camDraft.state !== 'draft') camDraft = draftList()[0] || (await newDraft());
+  camDraft.images.push(...camShots.slice(0, 10 - camDraft.images.length));
+  await db.put(camDraft);
+  camShots = [];
+  camUrls.forEach((u) => URL.revokeObjectURL(u)); camUrls.clear();
+}
+function closeCamera() {
+  camStream?.getTracks().forEach((t) => t.stop());
+  camStream = null;
+  $('#camVideo').srcObject = null;
+  $('#camv').hidden = true;
+  document.body.style.overflow = '';
+  renderDrafts();
+}
+$('#camDone').onclick = async () => { await saveShots(); closeCamera(); };
+$('#camNext').onclick = async () => {
+  if (!camShots.length && !camDraft?.images.length) return toast('まず、この商品を撮影してください');
+  await saveShots();
+  camDraft = await newDraft();
+  drawCam();
+  toast(`${camTitle()}を撮影します`, 1500);
+};
+$('#camClose').onclick = () => {
+  if (camShots.length && !confirm(`撮った${camShots.length}枚を使わずに閉じますか？`)) return;
+  camShots = []; camUrls.forEach((u) => URL.revokeObjectURL(u)); camUrls.clear();
+  closeCamera();
 };
 
 // ---------------- 査定中・順番待ち と 査定結果（終わった順） ----------------
