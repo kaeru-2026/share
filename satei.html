@@ -128,6 +128,9 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
 .pcrow:last-child{border-bottom:0}
 .pcrow .nm{flex:1;min-width:0}.pcrow .nm b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pcrow .nm small{color:#888;font-size:12px}
 .pcrow .dot{width:9px;height:9px;border-radius:50%;background:#ccc;flex:none}.pcrow .dot.on{background:#34a853}
+.lh.stk{position:sticky;top:var(--hh,56px);z-index:6;background:#f4f5f7;margin-left:-12px;margin-right:-12px;padding:8px 12px;box-shadow:0 6px 8px -8px rgba(0,0,0,.25)}
+.job{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.job.press{transform:scale(.98);transition:transform .15s}
 </style>
 </head>
 <body>
@@ -159,7 +162,7 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
     <div class="lh"><h2>査定中・順番待ち</h2><span class="sp"></span><span id="qn" class="hint"></span></div>
     <div id="queue"></div>
 
-    <div class="lh" style="margin-top:14px"><h2>査定結果</h2><span id="rn" class="hint"></span>
+    <div class="lh stk" id="resHead" style="margin-top:14px"><h2>査定結果</h2><span id="rn" class="hint"></span>
       <button id="delSel" class="delx" hidden>削除</button>
       <span class="sp"></span>
       <button id="order" class="ghost sm"></button>
@@ -1138,11 +1141,36 @@ $('#redoSel').onclick = () => {
   for (const j of list) { j.state = 'wait'; j.msg = 'もう一度査定します…'; j.error = ''; save(j); try { conn.send({ t: 'redo', id: j.id }); } catch {} }
   toast(`${list.length}件を再査定します`);
 };
+// 長押しで選択モードにする（押した行を選んだ状態で）
+let lpTm = 0, lpX = 0, lpY = 0, lpFired = false;
+$('#jobs').addEventListener('pointerdown', (e) => {
+  const el = e.target.closest('.job');
+  if (!el) return;
+  lpFired = false; lpX = e.clientX; lpY = e.clientY;
+  el.classList.add('press');
+  clearTimeout(lpTm);
+  lpTm = setTimeout(() => {
+    el.classList.remove('press');
+    lpFired = true;
+    if (navigator.vibrate) navigator.vibrate(20);
+    const id = el.dataset.id;
+    if (!selMode) { selMode = true; render(); }
+    const row = $(`#jobs .job[data-id="${CSS.escape(id)}"]`);
+    const inp = row?.querySelector('input');
+    if (inp && !inp.checked) { inp.checked = true; row.classList.add('on'); }
+    updDel();
+  }, 500);
+});
+const lpCancel = () => { clearTimeout(lpTm); document.querySelectorAll('#jobs .job.press').forEach((x) => x.classList.remove('press')); };
+$('#jobs').addEventListener('pointermove', (e) => { if (Math.abs(e.clientX - lpX) > 10 || Math.abs(e.clientY - lpY) > 10) lpCancel(); });
+['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => $('#jobs').addEventListener(t, lpCancel));
+$('#jobs').addEventListener('contextmenu', (e) => e.preventDefault());
 // 選択中はタップで選ぶ／外す（選んだ行は色が変わる）。それ以外のときは詳細を開く
 $('#jobs').addEventListener('click', (e) => {
   const el = e.target.closest('.job');
   if (!el) return;
   e.preventDefault();
+  if (lpFired) { lpFired = false; return; } // 長押しの直後のタップは無視
   if (!selMode) return openSheet(el.dataset.id);
   const inp = el.querySelector('input');
   inp.checked = !inp.checked;
@@ -1319,6 +1347,10 @@ async function openQr() {
 function closeQr() { clearTimeout(qrTimer); qrStream?.getTracks().forEach((t) => t.stop()); qrStream = null; $('#qrVideo').srcObject = null; $('#qrv').hidden = true; }
 document.querySelectorAll('.qrBtn').forEach((b) => (b.onclick = openQr));
 $('#qrClose').onclick = closeQr;
+
+// 上の見出しの高さ（査定結果の見出しをその下に止めるため）
+const setHH = () => document.documentElement.style.setProperty('--hh', document.querySelector('header').offsetHeight + 'px');
+setHH(); addEventListener('resize', setHH);
 
 // ---------------- 起動 ----------------
 (() => {
