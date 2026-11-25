@@ -800,6 +800,7 @@ async function onData(d) {
       // 前の接続で送り終わらなかった分は、もう一度送る
       for (const j of jobs.values()) if (j.state === 'sending') j.state = 'unsent';
       flush();
+      flushDel();
       break;
     case 'cfg': ls.set('as_cfg', d.cfg); applyCfg(); break;
     case 'ack': { const j = jobs.get(d.id); if (j && j.state === 'sending') { j.state = 'wait'; j.msg = 'PCが受け取りました'; save(j); } break; }
@@ -1185,9 +1186,23 @@ $('#selDone').onclick = () => { selMode = false; $('#jobs').querySelectorAll('in
 $('#delSel').onclick = async () => {
   const ids = [...$('#jobs').querySelectorAll('input:checked')].map((i) => i.dataset.id);
   if (!ids.length || !confirm(`${ids.length}件の査定結果を削除しますか？`)) return;
-  for (const id of ids) { if (ok) try { conn.send({ t: 'delete', id }); } catch {} jobs.delete(id); await db.del(id); }
+  for (const id of ids) await delJob(id);
   render(); toast('削除しました');
 };
+
+// 削除：iPhoneの記録を消し、PCにも伝える（つながっていない間は覚えておき、次につながったときに伝える）
+async function delJob(id) {
+  jobs.delete(id);
+  await db.del(id);
+  let sent = false;
+  if (ok) try { conn.send({ t: 'delete', id }); sent = true; } catch {}
+  if (!sent) { const q = ls.get('as_delQ') || []; if (!q.includes(id)) q.push(id); ls.set('as_delQ', q.slice(-500)); }
+}
+function flushDel() {
+  const q = ls.get('as_delQ') || [];
+  if (!q.length || !ok) return;
+  try { for (const id of q) conn.send({ t: 'delete', id }); localStorage.removeItem('as_delQ'); } catch {}
+}
 
 // ---------------- 詳細 ----------------
 let sheetUrls = [];
@@ -1214,7 +1229,9 @@ function renderSheet(fresh) {
   let b = '';
   if (['run', 'wait', 'sending'].includes(j.state)) b += '<button class="ghost sm danger" id="sCancel">取り消し</button>';
   if ((j.state === 'done' || j.state === 'err') && !j.shared) b += `<button class="ghost sm" id="sRedo">もう一度査定</button>`;
+  if (j.state === 'done' || j.state === 'err') b += '<button class="ghost sm danger" id="sDel" style="margin-left:6px">削除</button>';
   $('#sheetBtns').innerHTML = b;
+  $('#sDel') && ($('#sDel').onclick = async () => { if (!confirm('この査定結果を削除しますか？')) return; const id = j.id; closeSheet(); await delJob(id); render(); toast('削除しました'); });
   $('#sheetBuy').hidden = j.state !== 'done';
   $('#shipTgl').hidden = j.state !== 'done';
   drawShipTgl();
