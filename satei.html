@@ -52,7 +52,8 @@ textarea{min-height:64px;resize:vertical}
 .tag{font-size:11px;padding:2px 8px;border-radius:10px;background:#f1f3f4;color:#555;white-space:nowrap}
 .tag.run{background:#e8f0fe;color:#1a56c4}.tag.err{background:#fce8e6;color:#b3261e}.tag.wait{background:#fef3e0;color:#a35200}
 .ck{display:none;align-items:center;justify-content:center;width:34px;align-self:stretch;touch-action:none}
-.sel .ck{display:flex}
+.job.on{background:#e8f0fe;box-shadow:0 0 0 2px #1a73e8 inset}
+.job.on .t1::before{content:"✓ ";color:#1a73e8;font-weight:700}
 .ck input{width:22px;height:22px;margin:0;pointer-events:none}
 .empty{color:#999;text-align:center;padding:24px 0}
 .sheet{position:fixed;inset:0;z-index:20;background:#fff;overflow:auto;-webkit-overflow-scrolling:touch}
@@ -97,10 +98,28 @@ textarea{min-height:64px;resize:vertical}
 .camv .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
 .camv .flash.on{opacity:.7;transition:none}
 .camv .cmsg{font-size:12px;opacity:.8;text-align:center;margin-top:8px}
+.pr .tm{display:block;font-size:11px;color:#888;font-weight:400;text-align:right}
+.mkp{font-size:11px;font-weight:600;padding:4px 8px;border-radius:12px;background:#f1f3f4;color:#888;border:0;white-space:nowrap}
+.mkp.on{background:#e6f4ea;color:#137333}
+header .pill{font-size:11px;padding:2px 8px}
+body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
+.bbar{position:fixed;left:0;right:0;bottom:0;z-index:15;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);border-top:1px solid #e3e6ea;padding:8px 12px calc(10px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+.bbar .big{margin:0}
+.b3{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:8px}
+.b3 button{padding:14px 6px;font-size:15px}
+.bbar .cam{font-size:17px}
+.bbar .done{background:#333}
+.sbar{flex-direction:row;z-index:22}
+.sbar button{padding:14px;font-size:15px}
+.sbar .red{flex:1;background:#d93025}
+.sheet .body{padding-bottom:calc(110px + env(safe-area-inset-bottom))}
+.draft.cur{border-color:#1a73e8;box-shadow:0 0 0 1px #1a73e8 inset}
+.draft .curtag{font-size:11px;color:#1a73e8;font-weight:600}
+.delx{background:none;color:#c5221f;font-size:13px;font-weight:600;padding:4px 8px;border:1px solid #f1c4c0;border-radius:8px}
 </style>
 </head>
 <body>
-<header><h1>AI査定</h1><span class="sp"></span><span id="st" class="pill off">未接続</span><button id="openSet" class="hbtn" aria-label="設定">⚙</button></header>
+<header><h1>AI査定</h1><span id="st" class="pill off">未接続</span><span class="sp"></span><button id="mkPill" class="mkp" type="button"></button><button id="openSet" class="hbtn" aria-label="設定">⚙</button></header>
 
 <div class="wrap">
   <section id="pair" class="card" hidden>
@@ -120,38 +139,51 @@ textarea{min-height:64px;resize:vertical}
     <div class="card">
       <h2>新しく査定</h2>
       <div id="drafts"></div>
-      <button id="addDraft" class="ghost" style="width:100%">＋ 商品を追加</button>
-      <button id="mkSw" class="sw" type="button"><span class="knob"></span><span>相場検索（ヤフオク・メルカリ）<small id="mkTxt"></small></span></button>
-      <button id="send" class="big" disabled>査定する</button>
     </div>
 
     <div class="lh"><h2>査定中・順番待ち</h2><span class="sp"></span><span id="qn" class="hint"></span></div>
     <div id="queue"></div>
 
-    <div class="lh" style="margin-top:14px"><h2>査定結果</h2><span id="rn" class="hint"></span><span class="sp"></span>
+    <div class="lh" style="margin-top:14px"><h2>査定結果</h2><span id="rn" class="hint"></span>
+      <button id="delSel" class="delx" hidden>削除</button>
+      <span class="sp"></span>
       <button id="order" class="ghost sm"></button>
       <button id="selMode" class="ghost sm">選択</button>
-      <button id="delSel" class="ghost sm danger" hidden>削除</button>
     </div>
-    <div id="selBar" class="two" style="margin-bottom:8px" hidden>
-      <button id="allSel" class="ghost">全て選択</button>
-      <button id="redoSel" class="ghost">再査定</button>
-    </div>
-    <button id="buySel" class="big" hidden>買取価格を計算</button>
     <div id="jobs"></div>
   </section>
+</div>
+
+<!-- 親指で押す操作（画面の下に固定） -->
+<div id="barNew" class="bbar" hidden>
+  <button id="send" class="big" hidden>査定する</button>
+  <div class="b3">
+    <button id="bAdd" class="ghost">＋ 商品</button>
+    <button id="bCam" class="cam">📷 撮影</button>
+    <button id="bLib" class="ghost">🖼 写真</button>
+  </div>
+</div>
+<div id="barSel" class="bbar" hidden>
+  <button id="buySel" class="big">買取価格を計算</button>
+  <div class="b3">
+    <button id="allSel" class="ghost">全て選択</button>
+    <button id="redoSel" class="ghost">再査定</button>
+    <button id="selDone" class="done">完了</button>
+  </div>
 </div>
 
 <!-- 結果の詳細 -->
 <div id="sheet" class="sheet" hidden>
   <div class="bar"><button id="back" class="ghost sm">‹ 戻る</button><span class="sp"></span><span id="sheetBtns"></span></div>
   <div class="body" id="sheetBody"></div>
+  <div class="bbar sbar"><button id="back2" class="ghost">‹ 戻る</button><button id="sheetBuy" class="red">買取価格を表示</button></div>
 </div>
 
 <!-- 買取価格の計算 -->
 <div id="buySheet" class="sheet" hidden>
   <div class="bar"><button id="buyBack" class="ghost sm">‹ 戻る</button><span class="sp"></span><b>買取価格の計算</b><span class="sp"></span></div>
   <div class="body" id="buyBox"></div>
+  <div class="bbar sbar"><button id="buyBack2" class="ghost" style="flex:1">‹ 戻る</button></div>
 </div>
 
 <!-- 設定 -->
@@ -353,6 +385,8 @@ textarea{min-height:64px;resize:vertical}
   const list = (a) => (Array.isArray(a) ? a : a ? [a] : []).map((x) => String(x ?? '').trim()).filter(Boolean);
   const ul = (a, cls = '') => { const l = list(a); return l.length ? `<ul class="sv-ul ${cls}">${l.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''; };
   const sec = (title, body, cls = '') => (body ? `<section class="sv-sec ${cls}"><h3>${title}</h3>${body}</section>` : '');
+  // 査定にかかった時間（秒 → 「1分12秒」）
+  const dur = (sec) => { sec = Math.round(+sec || 0); if (sec <= 0) return ''; const m = Math.floor(sec / 60), s = sec % 60; return m ? `${m}分${s ? s + '秒' : ''}` : `${s}秒`; };
   const fmtDate = (t) => { try { const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; } catch { return ''; } };
 
   const CSS = `
@@ -494,7 +528,7 @@ textarea{min-height:64px;resize:vertical}
 
     h += sec('売るときのアドバイス', ul(f.advice));
 
-    const foot = [r.ai && `AI：${esc(r.ai)}`, r.mode === 'ai' ? '相場検索：オフ' : mk.keyword && `相場の検索語：${esc(mk.keyword)}`, r.at && `査定日時：${fmtDate(r.at)}`].filter(Boolean);
+    const foot = [r.ai && `AI：${esc(r.ai)}`, r.mode === 'ai' ? '相場検索：オフ' : mk.keyword && `相場の検索語：${esc(mk.keyword)}`, r.at && `査定日時：${fmtDate(r.at)}`, r.sec && `査定時間：${dur(r.sec)}`].filter(Boolean);
     if (r.warn?.length) h += `<p class="sv-note sv-err">${r.warn.map(esc).join('<br>')}</p>`;
     h += `<div class="sv-foot">${foot.join('　')}<br>※価格は目安です。最終的な価格はご自身で判断してください。</div>`;
     return h + '</div>';
@@ -634,7 +668,7 @@ textarea{min-height:64px;resize:vertical}
     return { name: r?.product?.name || '', price: rec.price || 0, cond: r?.condition?.label || '' };
   }
 
-  (typeof window !== 'undefined' ? window : globalThis).SateiView = { COND, esc, yen, render, summary, fmtDate, SIZES, SIZE_NAME, PLAT, DEF_COST, mergeCfg, setCfg, sizeKey, shipYen, calcBuy, openBuy, getCfg: () => CFG };
+  (typeof window !== 'undefined' ? window : globalThis).SateiView = { COND, esc, yen, render, summary, fmtDate, dur, SIZES, SIZE_NAME, PLAT, DEF_COST, mergeCfg, setCfg, sizeKey, shipYen, calcBuy, openBuy, getCfg: () => CFG };
 })();
 </script>
 <script>
@@ -664,7 +698,8 @@ const pin = String(crypto.getRandomValues(new Uint16Array(1))[0] % 9000 + 1000);
 
 // ---------------- 状態表示 ----------------
 function setSt(t, cls = '') { const s = $('#st'); s.textContent = t; s.className = 'pill ' + cls; }
-function screenOf(w) { $('#pair').hidden = w !== 'pair'; $('#wait').hidden = w !== 'wait'; $('#main').hidden = w !== 'main'; }
+function screenOf(w) { $('#pair').hidden = w !== 'pair'; $('#wait').hidden = w !== 'wait'; $('#main').hidden = w !== 'main'; drawBars(); }
+function drawBars() { const m = !$('#main').hidden; $('#barNew').hidden = !m || selMode; $('#barSel').hidden = !m || !selMode; }
 
 // ---------------- 接続 ----------------
 function peerOpts() {
@@ -813,22 +848,28 @@ async function addPhotos(files) {
   renderDrafts();
 }
 const durl = (b) => { if (!durls.has(b)) durls.set(b, URL.createObjectURL(b)); return durls.get(b); };
+let curDraftId = '';
+const curDraft = () => { const l = draftList(); return l.find((d) => d.id === curDraftId) || l[l.length - 1]; };
 function renderDrafts() {
   const list = draftList();
-  $('#drafts').innerHTML = list.map((d, i) => `<div class="draft" data-d="${d.id}">
-    <div class="dt"><b>商品 ${i + 1}</b><span class="hint" style="margin:0">${d.images.length ? `写真${d.images.length}枚` : ''}</span><span class="sp"></span>
+  const cur = curDraft();
+  $('#drafts').innerHTML = list.map((d, i) => `<div class="draft ${list.length > 1 && d === cur ? 'cur' : ''}" data-d="${d.id}">
+    <div class="dt"><b>商品 ${i + 1}</b><span class="hint" style="margin:0">${d.images.length ? `写真${d.images.length}枚` : ''}</span>${list.length > 1 && d === cur ? '<span class="curtag">📷 撮影・写真はここに追加</span>' : ''}<span class="sp"></span>
       ${list.length > 1 || d.images.length ? `<button class="ghost sm danger" data-rm="${d.id}">削除</button>` : ''}</div>
-    <div class="two"><button class="ghost" data-cam="${d.id}">📷 撮影する</button><button class="ghost" data-lib="${d.id}">🖼 写真を選ぶ</button></div>
-    ${d.images.length ? `<div class="pics">${d.images.map((b, k) => `<div class="p"><img src="${durl(b)}" alt=""><button class="x" data-x="${d.id}:${k}">×</button></div>`).join('')}</div>` : '<p class="hint">商品全体・ロゴ・型番・タグ・傷のある所など、いろいろな角度から撮ると正確になります（10枚まで）。</p>'}
+    ${d.images.length ? `<div class="pics">${d.images.map((b, k) => `<div class="p"><img src="${durl(b)}" alt=""><button class="x" data-x="${d.id}:${k}">×</button></div>`).join('')}</div>` : '<p class="hint">下の「📷 撮影」で撮るか「🖼 写真」で選びます。商品全体・ロゴ・型番・タグ・傷のある所など、いろいろな角度から撮ると正確になります（10枚まで）。</p>'}
     <div class="chips">${WORKS.map(([k, t]) => `<span class="chip ${d.work === k ? 'on' : ''}" data-w="${d.id}:${k}">${t}</span>`).join('')}</div>
     <textarea data-note="${d.id}" placeholder="メモ（任意）：付属品あり・購入時期・気になる点 など">${esc(d.note)}</textarea>
   </div>`).join('');
   const n = list.filter((d) => d.images.length).length;
+  $('#send').hidden = !n;
   $('#send').disabled = !n;
   $('#send').textContent = n > 1 ? `${n}件をまとめて査定する` : '査定する';
 }
 $('#drafts').addEventListener('click', async (e) => {
   const t = e.target.closest('[data-cam],[data-lib],[data-x],[data-w],[data-rm]');
+  // 商品の枠を押したら、そこを撮影・写真の追加先にする
+  const card = e.target.closest('.draft');
+  if (card && card.dataset.d !== curDraftId && !e.target.closest('textarea')) { curDraftId = card.dataset.d; if (!t) { renderDrafts(); return; } }
   if (!t) return;
   if (t.dataset.cam) { openCamera(t.dataset.cam); return; }
   if (t.dataset.lib) { pickFor = t.dataset.lib; $('#lib').click(); return; }
@@ -845,12 +886,15 @@ $('#drafts').addEventListener('click', async (e) => {
 $('#drafts').addEventListener('input', (e) => { const id = e.target.dataset.note; if (!id) return; const d = jobs.get(id); d.note = e.target.value; clearTimeout(d._t); d._t = setTimeout(() => db.put({ ...d, _t: undefined }), 500); });
 $('#cam').onchange = (e) => { addPhotos(e.target.files); e.target.value = ''; };
 $('#lib').onchange = (e) => { addPhotos(e.target.files); e.target.value = ''; };
-$('#addDraft').onclick = async () => { const d = await newDraft(); renderDrafts(); $(`.draft[data-d="${d.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+// 下の操作：＋商品・撮影・写真（今の商品に追加）
+$('#bAdd').onclick = async () => { const last = draftList().pop(); const d = last && !last.images.length ? last : await newDraft(); curDraftId = d.id; renderDrafts(); $(`.draft[data-d="${d.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+$('#bCam').onclick = async () => { const d = curDraft() || (await newDraft()); openCamera(d.id); };
+$('#bLib').onclick = async () => { const d = curDraft() || (await newDraft()); pickFor = d.id; $('#lib').click(); };
 
 // 相場検索のオン・オフ
 let mkOn = ls.get('as_mk') !== false;
-function drawSw() { $('#mkSw').classList.toggle('on', mkOn); $('#mkTxt').textContent = mkOn ? 'オン：売れた価格を調べて査定' : 'オフ：AIだけで査定（速い）'; }
-$('#mkSw').onclick = () => { mkOn = !mkOn; ls.set('as_mk', mkOn); drawSw(); };
+function drawSw() { const b = $('#mkPill'); b.classList.toggle('on', mkOn); b.textContent = mkOn ? '相場 ON' : '相場 OFF'; }
+$('#mkPill').onclick = () => { mkOn = !mkOn; ls.set('as_mk', mkOn); drawSw(); toast(mkOn ? '相場検索 ON：ヤフオク・メルカリの売れた価格も調べます' : '相場検索 OFF：AIだけで査定します（速い）'); };
 drawSw();
 
 $('#send').onclick = async () => {
@@ -865,7 +909,7 @@ $('#send').onclick = async () => {
     await db.put(d);
   }
   durls.forEach((u) => URL.revokeObjectURL(u)); durls.clear();
-  await newDraft();
+  curDraftId = (await newDraft()).id;
   renderDrafts();
   render();
   toast(ok ? `${list.length}件をPCへ送りました。順番に査定します` : 'PCにつながったら自動で送ります');
@@ -964,7 +1008,7 @@ function rowHtml(j) {
   const t1 = s.name || j.error || '';
   return `<label class="ck"><input type="checkbox" data-id="${esc(j.id)}"></label><span class="no">${j._no}</span><img src="${esc(j.thumb || '')}" alt="">
     <div class="tx"><div class="t1">${esc(t1)}</div><div class="t2">${esc(SateiView.fmtDate(j.doneAt || j.at))}${s.cond ? '　' + esc(s.cond) : ''}${j.result?.mode === 'ai' ? '　AIだけ' : ''}</div></div>
-    ${j.state === 'done' ? `<span class="pr">${s.price ? SateiView.yen(s.price) : '—'}</span>` : '<span class="tag err">エラー</span>'}`;
+    ${j.state === 'done' ? `<span class="pr">${s.price ? SateiView.yen(s.price) : '—'}${j.result?.sec ? `<small class="tm">⏱ ${SateiView.dur(j.result.sec)}</small>` : ''}</span>` : '<span class="tag err">エラー</span>'}`;
 }
 function render() {
   // 査定中・順番待ち
@@ -980,13 +1024,14 @@ function render() {
   $('#rn').textContent = list.length ? `${list.length}件` : '';
   $('#order').textContent = order === 'new' ? '新しい順' : '終わった順';
   box.className = selMode ? 'sel' : '';
+  drawBars();
   box.innerHTML = list.length ? '' : '<p class="empty">査定が終わった順に、ここに保存されます</p>';
   for (const j of list) {
     const el = document.createElement('div');
     el.className = 'job' + (j.isNew ? ' new' : '');
     el.dataset.id = j.id;
     el.innerHTML = rowHtml(j);
-    if (checked.has(j.id)) el.querySelector('input').checked = true;
+    if (checked.has(j.id)) { el.querySelector('input').checked = true; el.classList.add('on'); }
     box.appendChild(el);
   }
   updDel();
@@ -999,9 +1044,18 @@ function updateRow(j) {
   }
   render();
 }
-function updDel() { const ids = [...$('#jobs').querySelectorAll('input:checked')].map((i) => i.dataset.id); const n = ids.length, nd = ids.filter((id) => jobs.get(id)?.state === 'done').length; $('#delSel').hidden = !selMode; $('#delSel').textContent = n ? `削除（${n}）` : '削除'; $('#delSel').disabled = !n; $('#buySel').hidden = !selMode; $('#buySel').disabled = !nd; const all = $('#jobs').querySelectorAll('input[type=checkbox]'); $('#selBar').hidden = !selMode; $('#allSel').textContent = all.length && n === all.length ? '選択を解除' : '全て選択'; $('#redoSel').disabled = !n; $('#redoSel').textContent = n ? `再査定（${n}件）` : '再査定'; $('#buySel').textContent = nd ? `買取価格を計算（${nd}点）` : 'チェックした商品の買取価格を計算'; }
-dragSelect($('#jobs'), updDel);
-$('#allSel').onclick = () => { const all = [...$('#jobs').querySelectorAll('input[type=checkbox]')]; const on = !all.every((i) => i.checked); all.forEach((i) => (i.checked = on)); updDel(); };
+function updDel() {
+  const ids = [...$('#jobs').querySelectorAll('input:checked')].map((i) => i.dataset.id);
+  const n = ids.length, nd = ids.filter((id) => jobs.get(id)?.state === 'done').length;
+  const all = $('#jobs').querySelectorAll('input[type=checkbox]');
+  $('#delSel').hidden = !selMode; $('#delSel').disabled = !n; $('#delSel').textContent = n ? `削除（${n}）` : '削除';
+  $('#selMode').hidden = selMode;
+  $('#buySel').disabled = !nd; $('#buySel').textContent = nd ? `買取価格を計算（${nd}点）` : 'チェックして買取価格を計算';
+  $('#allSel').textContent = all.length && n === all.length ? '選択を解除' : '全て選択';
+  $('#redoSel').disabled = !n; $('#redoSel').textContent = n ? `再査定（${n}）` : '再査定';
+  drawBars();
+}
+$('#allSel').onclick = () => { const all = [...$('#jobs').querySelectorAll('input[type=checkbox]')]; const on = !all.every((i) => i.checked); all.forEach((i) => { i.checked = on; i.closest('.job').classList.toggle('on', on); }); updDel(); };
 $('#redoSel').onclick = () => {
   const list = [...$('#jobs').querySelectorAll('input:checked')].map((i) => jobs.get(i.dataset.id)).filter((j) => j && (j.state === 'done' || j.state === 'err'));
   if (!list.length) return;
@@ -1010,10 +1064,22 @@ $('#redoSel').onclick = () => {
   for (const j of list) { j.state = 'wait'; j.msg = 'もう一度査定します…'; j.error = ''; save(j); try { conn.send({ t: 'redo', id: j.id }); } catch {} }
   toast(`${list.length}件を再査定します`);
 };
-$('#jobs').addEventListener('click', (e) => { if (e.target.closest('.ck')) return; const el = e.target.closest('.job'); if (el && !selMode) openSheet(el.dataset.id); });
+// 選択中はタップで選ぶ／外す（選んだ行は色が変わる）。それ以外のときは詳細を開く
+$('#jobs').addEventListener('click', (e) => {
+  const el = e.target.closest('.job');
+  if (!el) return;
+  e.preventDefault();
+  if (!selMode) return openSheet(el.dataset.id);
+  const inp = el.querySelector('input');
+  inp.checked = !inp.checked;
+  el.classList.toggle('on', inp.checked);
+  updDel();
+});
 $('#queue').addEventListener('click', (e) => { const el = e.target.closest('.q'); if (el) openSheet(el.dataset.id); });
 $('#order').onclick = () => { order = order === 'new' ? 'done' : 'new'; ls.set('as_order', order); render(); };
-$('#selMode').onclick = () => { selMode = !selMode; $('#selMode').textContent = selMode ? '完了' : '選択'; render(); };
+$('#selMode').onclick = () => { selMode = true; render(); };
+// 完了：選択モードを終えて、チェックは全部外す
+$('#selDone').onclick = () => { selMode = false; $('#jobs').querySelectorAll('input:checked').forEach((i) => (i.checked = false)); render(); };
 $('#delSel').onclick = async () => {
   const ids = [...$('#jobs').querySelectorAll('input:checked')].map((i) => i.dataset.id);
   if (!ids.length || !confirm(`${ids.length}件の査定結果を削除しますか？`)) return;
@@ -1046,6 +1112,7 @@ function renderSheet(fresh) {
   if (['run', 'wait', 'sending'].includes(j.state)) b += '<button class="ghost sm danger" id="sCancel">取り消し</button>';
   if (j.state === 'done' || j.state === 'err') b += `<button class="ghost sm" id="sRedo">もう一度査定</button>`;
   $('#sheetBtns').innerHTML = b;
+  $('#sheetBuy').hidden = j.state !== 'done';
   $('#sCancel') && ($('#sCancel').onclick = () => { if (!ok) return toast('PCにつながっていません'); conn.send({ t: 'cancel', id: j.id }); toast('取り消しを送りました'); });
   $('#sRedo') && ($('#sRedo').onclick = () => {
     if (!ok) return toast('PCにつながっていません');
@@ -1055,6 +1122,8 @@ function renderSheet(fresh) {
 }
 function closeSheet() { openId = ''; $('#sheet').hidden = true; document.body.style.overflow = ''; sheetUrls.forEach(URL.revokeObjectURL); sheetUrls = []; }
 $('#back').onclick = closeSheet;
+$('#back2').onclick = closeSheet;
+$('#sheetBuy').onclick = () => { const j = jobs.get(openId); if (j?.state === 'done') openBuyFor([j]); };
 $('#openSet').onclick = () => { $('#setSheet').hidden = false; document.body.style.overflow = 'hidden'; };
 $('#closeSet').onclick = () => { $('#setSheet').hidden = true; document.body.style.overflow = ''; };
 
@@ -1075,15 +1144,17 @@ $('#basisSel').onchange = () => {
   toast(c.basis === 'incl' ? '送料込みで表示します' : '送料別で表示します');
 };
 applyCfg();
-$('#buySel').onclick = () => {
-  const list = [...$('#jobs').querySelectorAll('input:checked')].map((i) => jobs.get(i.dataset.id)).filter((j) => j?.state === 'done');
-  if (!list.length) return;
+function openBuyFor(list) {
   const items = list.map((j) => ({ id: j.id, name: j.result?.product?.name || '商品名不明', cond: j.result?.condition?.label || '', thumb: j.thumb, rec: j.result?.final?.recommend || {}, size: j.result?.ship?.size || '', buy: j.buy ? { ...j.buy } : undefined }));
   SateiView.openBuy($('#buyBox'), items, SateiView.getCfg(), { mobile: true, onSave: (id, b) => { const j = jobs.get(id); if (j) { j.buy = b; db.put(j); } }, onOpt: (o) => { const c = { ...(ls.get('as_cfg') || {}), ...o }; ls.set('as_cfg', c); SateiView.setCfg(c); if (ok) try { conn.send({ t: 'cfgSet', opt: o }); } catch {} } });
   $('#buySheet').hidden = false; $('#buySheet').scrollTop = 0;
   document.body.style.overflow = 'hidden';
+}
+$('#buySel').onclick = () => {
+  const list = [...$('#jobs').querySelectorAll('input:checked')].map((i) => jobs.get(i.dataset.id)).filter((j) => j?.state === 'done');
+  if (list.length) openBuyFor(list);
 };
-$('#buyBack').onclick = () => { $('#buySheet').hidden = true; document.body.style.overflow = ''; };
+$('#buyBack').onclick = $('#buyBack2').onclick = () => { $('#buySheet').hidden = true; if ($('#sheet').hidden) document.body.style.overflow = ''; };
 
 // ---------------- 端末の設定 ----------------
 $('#devName').value = me.name;
