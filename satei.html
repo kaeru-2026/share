@@ -11,6 +11,12 @@
 <title>AI査定</title>
 <style>
 [hidden]{display:none!important}
+.apv{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;display:flex;align-items:flex-end;justify-content:center;padding:12px 12px calc(12px + env(safe-area-inset-bottom))}
+.abox{background:#fff;border-radius:18px;padding:18px;width:100%;max-width:420px}
+.abox h3{margin:0 0 8px;font-size:17px}
+.abox table{width:100%;font-size:15px;line-height:2}.abox td:first-child{color:#888;width:76px}
+.abox .pn{font-size:30px;font-weight:700;letter-spacing:.2em;color:#1a73e8}
+.ab{display:flex;gap:10px;margin-top:12px}.ab button{flex:1;padding:15px;border-radius:12px;font-size:16px}.ab .no{background:#fff;border:1px solid #e8b4b4;color:#d32f2f}.ab .yes{background:#1a73e8;color:#fff;border:0}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
 body{font-family:-apple-system,"Hiragino Sans",system-ui,sans-serif;font-size:15px;color:#222;background:#f4f5f7;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
@@ -83,7 +89,18 @@ textarea{min-height:64px;resize:vertical}
 .q .tx{flex:1;min-width:0}.q .t1{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.q .t2{font-size:12px;color:#777}
 .job .no{font-size:11px;color:#999;min-width:1.8em;text-align:right}
 .camv{position:fixed;inset:0;z-index:40;background:#000;display:flex;flex-direction:column;color:#fff}
-.camv video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
+.camv video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;transform-origin:center}
+.camv .cvw{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none}
+.camv .crop{position:absolute;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.7)}
+.camv .zl{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(0,0,0,.55);padding:3px 10px;border-radius:12px;font-size:13px}
+.camv .copt{display:flex;align-items:center;gap:6px;padding:0 10px 6px}
+.camv .copt .crow{flex:1;display:flex;gap:5px;overflow-x:auto}
+.camv .cc.hq{flex:none}.camv .cc.hq.on{background:#ffb300;color:#000}
+.camv .hqbar{padding:6px 12px 0;background:rgba(0,0,0,.35)}
+.camv .hrow{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
+.camv .hrow input[type=range]{flex:1}
+.camv .hl{width:44px;opacity:.85;flex:none}
+.camv .hnote{font-size:11px;opacity:.75}
 .camv .ct{display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px}
 .camv .ct b{font-size:15px}
 .camv .cb{padding:8px 12px calc(14px + env(safe-area-inset-bottom))}
@@ -243,6 +260,7 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
     </div>
     <div class="card">
       <h2>接続先のPC</h2>
+      <p class="hint" id="roleInfo" hidden style="color:#137333">✓ このiPhoneは「承認権限」があります。新しいiPhoneが接続を申し込むと、ここに許可の画面が出ます。</p>
       <p class="hint" id="pcInfo">未接続</p>
       <div id="pcList"></div>
       <div class="two" style="margin-top:8px"><button class="ghost qrBtn">📷 QRで追加</button><button id="changePc" class="ghost">コードで追加</button></div>
@@ -261,10 +279,24 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
   <div class="cb"><p class="cmsg" style="font-size:14px">PCの「AI査定」→ ⚙ 設定・iPhone接続 に出ているQRコードを、枠の中に写してください</p></div>
 </div>
 
+<!-- 新しい端末の許可（承認権限があるとき） -->
+<div id="apvBox"></div>
+
 <!-- 連続撮影 -->
 <div id="camv" class="camv" hidden>
   <div class="ct"><button id="camClose" class="cbtn" style="padding:8px 12px">✕ やめる</button><span class="sp"></span><b id="camTitle"></b><span id="camCount" style="font-size:13px;opacity:.85"></span><span class="sp"></span><button id="camNext" class="cbtn" style="padding:8px 10px;font-size:13px">＋次の商品</button></div>
-  <div style="position:relative;flex:1;min-height:0;display:flex"><video id="camVideo" playsinline muted autoplay></video><div id="camFlash" class="flash"></div></div>
+  <div class="copt">
+    <div class="crow" id="camAsp"></div>
+    <button id="camHq" class="cc hq">高画質</button>
+  </div>
+  <div class="cvw" id="camVw"><video id="camVideo" playsinline muted autoplay></video><div id="camCrop" class="crop"></div><div id="camFlash" class="flash"></div><div id="camZmLbl" class="zl" hidden></div></div>
+  <div class="hqbar" id="hqBar" hidden>
+    <div class="hrow" id="lensRow"></div>
+    <div class="hrow"><span class="hl">ズーム</span><input type="range" id="zm" min="1" max="5" step="0.1" value="1"><b id="zmV">1.0×</b></div>
+    <div class="hrow" id="focRow" hidden><span class="hl">ピント</span><input type="range" id="foc" min="0" max="1" step="0.01"><button class="cc" id="focAuto">自動</button></div>
+    <div class="hrow" id="expRow" hidden><span class="hl">明るさ</span><input type="range" id="exp" min="-2" max="2" step="0.1" value="0"></div>
+    <div class="hrow"><button class="cc" id="torch" hidden>💡 ライト</button><span class="hnote" id="hqNote"></span></div>
+  </div>
   <div class="cb">
     <div id="camChips"></div>
     <div id="camStrip" class="strip"></div>
@@ -815,7 +847,7 @@ function dial() {
     c.send({ t: 'hello', dev: { id: me.id, secret: me.secret, name: me.name, model: model(), pin } });
   });
   c.on('data', (d) => { if (c === conn) onData(d); });
-  c.on('close', () => { if (c !== conn) return; ok = false; setSt('再接続中…', 'warn'); retry(2500); });
+  c.on('close', () => { if (c !== conn) return; ok = false; if (!code) return; /* 拒否されたときは、つなぎ直さない */ setSt('再接続中…', 'warn'); retry(2500); });
   c.on('error', () => {});
 }
 setInterval(() => {
@@ -845,6 +877,9 @@ async function onData(d) {
       flushDel();
       break;
     case 'cfg': ls.set('as_cfg', d.cfg); applyCfg(); break;
+    case 'role': isAdmin = !!d.admin; drawRole(); break;
+    case 'approveReq': showApprove(d); break;
+    case 'approveDone': { const m = approvals[d.reqId]; if (m) { m.remove(); delete approvals[d.reqId]; toast(`「${d.name || '新しい端末'}」は${d.by || ''}されました`); } break; }
     case 'ack': { const j = jobs.get(d.id); if (j && j.state === 'sending') { j.state = 'wait'; j.msg = 'PCが受け取りました'; save(j); } break; }
     case 'missing': { const j = jobs.get(d.id); if (j && j.state !== 'done') { j.state = 'unsent'; save(j); flush(); } break; }
     case 'status': { const j = jobs.get(d.id); if (j && j.state !== 'done') { j.state = d.stage === 'wait' ? 'wait' : 'run'; j.msg = String(d.msg || ''); save(j, true); } break; }
@@ -1017,24 +1052,129 @@ $('#send').onclick = async () => {
 // ---------------- 連続撮影（ページの中のカメラ。使えないときは標準のカメラ） ----------------
 let camStream = null, camShots = [], camDraft = null;
 const camUrls = new Map();
+// カメラの設定（次回も同じ）：写真の形・高画質モード・レンズ
+const ASPECTS = [['full', 'そのまま', 0], ['1:1', 'スクエア', 1], ['4:3', '横 4:3', 4 / 3], ['3:4', '縦 3:4', 3 / 4], ['16:9', '横 16:9', 16 / 9]];
+const camCfg = Object.assign({ aspect: 'full', hq: false, lens: '' }, ls.get('as_cam') || {});
+const saveCam = () => ls.set('as_cam', camCfg);
+let camZoom = 1, hwZoom = null, camTrack = null;
+async function startStream() {
+  camStream?.getTracks().forEach((t) => t.stop());
+  const hq = camCfg.hq;
+  const v = { width: { ideal: hq ? 4032 : 1920 }, height: { ideal: hq ? 3024 : 1440 } };
+  if (hq && camCfg.lens) v.deviceId = { exact: camCfg.lens }; else v.facingMode = { ideal: 'environment' };
+  try { camStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: v }); }
+  catch (e) { if (v.deviceId) { camCfg.lens = ''; saveCam(); return startStream(); } throw e; }
+  camTrack = camStream.getVideoTracks()[0];
+  const vid = $('#camVideo');
+  vid.srcObject = camStream;
+  try { await vid.play(); } catch {}
+  camZoom = 1; setZoom(1);
+  await drawHq();
+}
 async function openCamera(draftId) {
   camDraft = jobs.get(draftId);
   camShots = [];
-  try {
-    camStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2880 } } });
-  } catch (e) {
+  try { await startStream(); } catch (e) {
     camStream = null;
     toast('カメラを使えないため、標準のカメラで撮影します（1枚ずつ）');
     pickFor = draftId; $('#cam').click();
     return;
   }
-  const v = $('#camVideo');
-  v.srcObject = camStream;
-  try { await v.play(); } catch {}
   $('#camv').hidden = false;
   document.body.style.overflow = 'hidden';
+  drawAsp();
   drawCam();
+  requestAnimationFrame(placeCrop);
 }
+// 写真の形（スクエアなど）
+function drawAsp() {
+  $('#camAsp').innerHTML = ASPECTS.map(([k, t]) => `<button class="cc ${camCfg.aspect === k ? 'on' : ''}" data-asp="${k}">${t}</button>`).join('');
+  $('#camHq').classList.toggle('on', camCfg.hq);
+  $('#hqBar').hidden = !camCfg.hq;
+}
+$('#camAsp').onclick = (e) => { const b = e.target.closest('[data-asp]'); if (!b) return; camCfg.aspect = b.dataset.asp; saveCam(); drawAsp(); placeCrop(); };
+const aspRatio = () => (ASPECTS.find((a) => a[0] === camCfg.aspect) || ASPECTS[0])[2];
+// 画面に、撮れる範囲の枠を出す
+function placeCrop() {
+  const v = $('#camVideo'), box = $('#camVw'), cr = $('#camCrop');
+  if (!v.videoWidth || $('#camv').hidden) return;
+  const cw = box.clientWidth, ch = box.clientHeight, sc = Math.min(cw / v.videoWidth, ch / v.videoHeight);
+  const dw = v.videoWidth * sc, dh = v.videoHeight * sc;
+  let w = dw, h = dh;
+  const r = aspRatio();
+  if (r) { if (dw / dh > r) w = dh * r; else h = dw / r; }
+  Object.assign(cr.style, { width: w + 'px', height: h + 'px', left: (cw - w) / 2 + 'px', top: (ch - h) / 2 + 'px', display: r ? 'block' : 'none' });
+}
+addEventListener('resize', () => setTimeout(placeCrop, 300));
+$('#camVideo').addEventListener('loadedmetadata', placeCrop);
+// 高画質モード（ズーム・レンズ・ピント・明るさ・ライト）
+$('#camHq').onclick = async () => {
+  camCfg.hq = !camCfg.hq; saveCam(); drawAsp();
+  try { await startStream(); } catch { toast('カメラを切り替えられませんでした'); }
+  setTimeout(placeCrop, 300);
+  toast(camCfg.hq ? '高画質モード：ズーム・レンズの切り替えなどが使えます' : '標準モードに戻しました', 1800);
+};
+async function drawHq() {
+  if (!camCfg.hq) { hwZoom = null; return; }
+  const cap = camTrack?.getCapabilities?.() || {}, set = camTrack?.getSettings?.() || {};
+  // ズーム：カメラが対応していればカメラのズーム、なければ画像を拡大（デジタルズーム）
+  hwZoom = cap.zoom && cap.zoom.max > cap.zoom.min ? cap.zoom : null;
+  const zm = $('#zm');
+  zm.min = hwZoom ? hwZoom.min : 1; zm.max = hwZoom ? Math.min(hwZoom.max, 10) : 5; zm.step = 0.1;
+  zm.value = hwZoom ? set.zoom || hwZoom.min : 1;
+  $('#zmV').textContent = (+zm.value).toFixed(1) + '×';
+  // ピント
+  const fd = cap.focusDistance;
+  $('#focRow').hidden = !(fd && fd.max > fd.min && (cap.focusMode || []).includes('manual'));
+  if (!$('#focRow').hidden) { const f = $('#foc'); f.min = fd.min; f.max = fd.max; f.step = fd.step || (fd.max - fd.min) / 100; f.value = set.focusDistance ?? fd.min; }
+  // 明るさ
+  const ex = cap.exposureCompensation;
+  $('#expRow').hidden = !(ex && ex.max > ex.min);
+  if (!$('#expRow').hidden) { const x = $('#exp'); x.min = ex.min; x.max = ex.max; x.step = ex.step || 0.1; x.value = set.exposureCompensation ?? 0; }
+  $('#torch').hidden = !cap.torch;
+  $('#hqNote').textContent = `${set.width || ''}×${set.height || ''}${hwZoom ? '' : '・デジタルズーム'}${$('#focRow').hidden ? '・ピントは画面を2本指で広げて近づけるか、レンズを切り替えてください' : ''}`;
+  // レンズ（背面の広角・超広角・望遠など）
+  try {
+    const list = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput' && d.label && !/前面|front|facetime/i.test(d.label));
+    const cur = set.deviceId || camCfg.lens;
+    const nm = (l) => (/超広角|ultra/i.test(l) ? '超広角（接写）' : /望遠|tele/i.test(l) ? '望遠' : /トリプル|triple/i.test(l) ? 'トリプル' : /デュアル広角|dual wide/i.test(l) ? 'デュアル広角' : /デュアル|dual/i.test(l) ? 'デュアル' : /広角|wide|back|背面/i.test(l) ? '広角' : l.slice(0, 12));
+    $('#lensRow').innerHTML = list.length > 1 ? `<span class="hl">レンズ</span>` + list.map((d) => `<button class="cc ${d.deviceId === cur ? 'on' : ''}" data-lens="${esc(d.deviceId)}">${esc(nm(d.label))}</button>`).join('') : '';
+  } catch { $('#lensRow').innerHTML = ''; }
+}
+$('#lensRow').onclick = async (e) => {
+  const b = e.target.closest('[data-lens]'); if (!b) return;
+  camCfg.lens = b.dataset.lens; saveCam();
+  try { await startStream(); } catch { toast('このレンズは使えません'); camCfg.lens = ''; saveCam(); await startStream(); }
+  setTimeout(placeCrop, 300);
+};
+function setZoom(z) {
+  const v = $('#camVideo');
+  if (hwZoom) {
+    z = Math.max(hwZoom.min, Math.min(+$('#zm').max, z));
+    camTrack.applyConstraints({ advanced: [{ zoom: z }] }).catch(() => {});
+    v.style.transform = '';
+  } else {
+    z = Math.max(1, Math.min(5, z));
+    v.style.transform = z > 1 ? `scale(${z})` : '';
+  }
+  camZoom = z;
+  $('#zm').value = z; $('#zmV').textContent = z.toFixed(1) + '×';
+  const l = $('#camZmLbl'); l.textContent = z.toFixed(1) + '×'; l.hidden = z <= 1.01 && !hwZoom;
+}
+$('#zm').oninput = () => setZoom(+$('#zm').value);
+$('#foc').oninput = () => camTrack?.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: +$('#foc').value }] }).catch(() => {});
+$('#focAuto').onclick = () => camTrack?.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+$('#exp').oninput = () => camTrack?.applyConstraints({ advanced: [{ exposureCompensation: +$('#exp').value }] }).catch(() => {});
+let torchOn = false;
+$('#torch').onclick = () => { torchOn = !torchOn; camTrack?.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => toast('ライトを使えません')); $('#torch').classList.toggle('on', torchOn); };
+// 2本指で広げる・つまむとズーム（高画質モード）
+(() => {
+  let d0 = 0, z0 = 1;
+  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  $('#camVw').addEventListener('touchstart', (e) => { if (e.touches.length === 2 && camCfg.hq) { d0 = dist(e.touches); z0 = camZoom; } }, { passive: true });
+  $('#camVw').addEventListener('touchmove', (e) => { if (e.touches.length === 2 && d0 && camCfg.hq) { e.preventDefault(); setZoom(z0 * dist(e.touches) / d0); } }, { passive: false });
+  $('#camVw').addEventListener('touchend', () => (d0 = 0));
+})();
 function camTitle() { const i = draftList().findIndex((d) => d.id === camDraft?.id); return `商品 ${i + 1}`; }
 function drawCam() {
   const have = camDraft ? camDraft.images.length : 0;
@@ -1072,11 +1212,18 @@ $('#camShut').onclick = async () => {
   if (!v.videoWidth) return;
   if ((camDraft?.images.length || 0) + camShots.length >= 10) return toast('1つの商品の写真は10枚までです。「＋次の商品」で続けて撮れます');
   const f = $('#camFlash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
-  const s = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight));
+  // デジタルズームの分と、写真の形（スクエアなど）の分を、真ん中から切り抜く
+  const dz = hwZoom ? 1 : camZoom;
+  let sw = v.videoWidth / dz, sh = v.videoHeight / dz;
+  const r = aspRatio();
+  if (r) { if (sw / sh > r) sw = sh * r; else sh = sw / r; }
+  const sx = (v.videoWidth - sw) / 2, sy = (v.videoHeight - sh) / 2;
+  const M = camCfg.hq ? 2560 : 1600;
+  const s = Math.min(1, M / Math.max(sw, sh));
   const c = document.createElement('canvas');
-  c.width = Math.round(v.videoWidth * s); c.height = Math.round(v.videoHeight * s);
-  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
-  const b = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.88));
+  c.width = Math.round(sw * s); c.height = Math.round(sh * s);
+  c.getContext('2d').drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  const b = await new Promise((r2) => c.toBlob(r2, 'image/jpeg', camCfg.hq ? 0.93 : 0.88));
   if (b) camShots.push(b);
   drawCam();
 };
@@ -1092,6 +1239,7 @@ function closeCamera() {
   camStream?.getTracks().forEach((t) => t.stop());
   camStream = null;
   $('#camVideo').srcObject = null;
+  $('#camVideo').style.transform = ''; torchOn = false;
   $('#camv').hidden = true;
   document.body.style.overflow = '';
   renderDrafts();
@@ -1320,6 +1468,30 @@ function renderSheet(fresh) {
   });
 }
 $('#rdBack').onclick = () => { $('#redoSheet').hidden = true; $('#rdTx').blur(); };
+// ---------------- 新しい端末の許可（承認権限があるとき、PCの代わりに許可できる） ----------------
+let isAdmin = false;
+const approvals = {};
+function drawRole() { const e = $('#roleInfo'); if (e) e.hidden = !isAdmin; }
+function showApprove(d) {
+  if (approvals[d.reqId]) return;
+  const m = document.createElement('div');
+  m.className = 'apv';
+  m.innerHTML = `<div class="abox"><h3>新しい端末から接続の申し込み</h3>
+    <table><tr><td>名前</td><td>${esc(d.name || '')}</td></tr><tr><td>機種</td><td>${esc(d.model || '不明')}</td></tr><tr><td>確認番号</td><td class="pn">${esc(d.pin || '')}</td></tr></table>
+    <p class="hint">相手のiPhoneに同じ確認番号が出ていれば、その端末です。知らない端末なら拒否してください。</p>
+    <div class="ab"><button class="no">拒否</button><button class="yes">許可する</button></div></div>`;
+  const ans = (okk) => {
+    if (!ok) return toast('PCとの接続が切れています');
+    try { conn.send({ t: 'approveRes', reqId: d.reqId, ok: okk }); } catch {}
+    m.remove(); delete approvals[d.reqId];
+  };
+  m.querySelector('.yes').onclick = () => ans(true);
+  m.querySelector('.no').onclick = () => ans(false);
+  approvals[d.reqId] = m;
+  $('#apvBox').appendChild(m);
+  try { navigator.vibrate?.(200); } catch {}
+}
+
 function closeSheet() { openId = ''; $('#sheet').hidden = true; document.body.style.overflow = ''; sheetUrls.forEach(URL.revokeObjectURL); sheetUrls = []; }
 $('#back').onclick = closeSheet;
 // 送料込み／送料別の表示を切り替える（今開いている商品の詳細だけ）
