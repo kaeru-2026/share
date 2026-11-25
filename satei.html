@@ -89,18 +89,17 @@ textarea{min-height:64px;resize:vertical}
 .q .tx{flex:1;min-width:0}.q .t1{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.q .t2{font-size:12px;color:#777}
 .job .no{font-size:11px;color:#999;min-width:1.8em;text-align:right}
 .camv{position:fixed;inset:0;z-index:40;background:#000;display:flex;flex-direction:column;color:#fff}
-.camv video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;transform-origin:center}
-.camv .cvw{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none}
-.camv .crop{position:absolute;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.7)}
-.camv .zl{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(0,0,0,.55);padding:3px 10px;border-radius:12px;font-size:13px}
+.camv .cvw{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding-top:16px}
+.camv .cbox{position:relative;overflow:hidden;background:#111;border-radius:4px}
+.camv .cbox video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
 .camv .copt{display:flex;align-items:center;gap:6px;padding:0 10px 6px}
-.camv .copt .crow{flex:1;display:flex;gap:5px;overflow-x:auto}
+.camv .copt .crow{flex:1;display:flex;gap:5px;overflow-x:auto;margin:0}
 .camv .cc.hq{flex:none}.camv .cc.hq.on{background:#ffb300;color:#000}
-.camv .hqbar{padding:6px 12px 0;background:rgba(0,0,0,.35)}
-.camv .hrow{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
-.camv .hrow input[type=range]{flex:1}
-.camv .hl{width:44px;opacity:.85;flex:none}
-.camv .hnote{font-size:11px;opacity:.75}
+.camv .lens{flex:none;height:44px;margin-top:8px;display:flex;justify-content:center;gap:8px}.camv .lens:empty{display:none}
+.camv .lens button{pointer-events:auto;min-width:44px;height:44px;border-radius:22px;padding:0 12px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-weight:600;border:0}
+.camv .lens button.on{background:rgba(0,0,0,.75);color:#ffd60a;box-shadow:inset 0 0 0 2px #ffd60a}
+.camv .lens button:disabled{opacity:.5}
+.camv .cinfo{position:absolute;top:6px;left:0;right:0;text-align:center;font-size:11px;opacity:.7;pointer-events:none}
 .camv .ct{display:flex;align-items:center;gap:8px;padding:calc(8px + env(safe-area-inset-top)) 12px 8px}
 .camv .ct b{font-size:15px}
 .camv .cb{padding:8px 12px calc(14px + env(safe-area-inset-bottom))}
@@ -289,14 +288,8 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
     <div class="crow" id="camAsp"></div>
     <button id="camHq" class="cc hq">高画質</button>
   </div>
-  <div class="cvw" id="camVw"><video id="camVideo" playsinline muted autoplay></video><div id="camCrop" class="crop"></div><div id="camFlash" class="flash"></div><div id="camZmLbl" class="zl" hidden></div></div>
-  <div class="hqbar" id="hqBar" hidden>
-    <div class="hrow" id="lensRow"></div>
-    <div class="hrow"><span class="hl">ズーム</span><input type="range" id="zm" min="1" max="5" step="0.1" value="1"><b id="zmV">1.0×</b></div>
-    <div class="hrow" id="focRow" hidden><span class="hl">ピント</span><input type="range" id="foc" min="0" max="1" step="0.01"><button class="cc" id="focAuto">自動</button></div>
-    <div class="hrow" id="expRow" hidden><span class="hl">明るさ</span><input type="range" id="exp" min="-2" max="2" step="0.1" value="0"></div>
-    <div class="hrow"><button class="cc" id="torch" hidden>💡 ライト</button><span class="hnote" id="hqNote"></span></div>
-  </div>
+  <div class="cvw" id="camVw"><div class="cbox" id="camBox"><video id="camVideo" playsinline muted autoplay></video><div id="camFlash" class="flash"></div></div>
+    <div class="lens" id="lensRow"></div><div class="cinfo" id="camInfo"></div></div>
   <div class="cb">
     <div id="camChips"></div>
     <div id="camStrip" class="strip"></div>
@@ -1056,20 +1049,56 @@ const camUrls = new Map();
 const ASPECTS = [['full', 'そのまま', 0], ['1:1', 'スクエア', 1], ['4:3', '横 4:3', 4 / 3], ['3:4', '縦 3:4', 3 / 4], ['16:9', '横 16:9', 16 / 9]];
 const camCfg = Object.assign({ aspect: 'full', hq: false, lens: '' }, ls.get('as_cam') || {});
 const saveCam = () => ls.set('as_cam', camCfg);
-let camZoom = 1, hwZoom = null, camTrack = null;
+let camTrack = null, camBusy = false, lenses = [], lensTried = false;
+// レンズの名前（iPhoneのカメラ名から）。「自動」はiPhoneが距離に合わせてレンズを切り替える（近くは接写）
+function lensKind(l) {
+  if (/超広角|ultra ?wide/i.test(l)) return ['uw', '0.5×'];
+  if (/望遠|tele/i.test(l)) return ['tele', '望遠'];
+  if (/トリプル|triple|デュアル|dual/i.test(l)) return ['auto', '自動'];
+  if (/広角|wide|背面|back|rear/i.test(l)) return ['wide', '1×'];
+  return ['', ''];
+}
+const LENS_ORDER = { auto: 0, uw: 1, wide: 2, tele: 3 };
+async function listLenses() {
+  try {
+    const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput' && d.label && !/前面|front|facetime|user/i.test(d.label));
+    const seen = new Set();
+    lenses = all.map((d) => ({ id: d.deviceId, label: d.label, kind: lensKind(d.label) })).filter((x) => x.kind[0])
+      .sort((a, b) => LENS_ORDER[a.kind[0]] - LENS_ORDER[b.kind[0]])
+      .filter((x) => { // 「自動」は1つだけ（トリプルがあればそれ）
+        if (x.kind[0] !== 'auto') return true;
+        if (seen.has('auto')) return false; seen.add('auto'); return true;
+      });
+    const tri = all.find((d) => /トリプル|triple/i.test(d.label));
+    if (tri) lenses = lenses.filter((x) => x.kind[0] !== 'auto' || x.id === tri.deviceId);
+  } catch { lenses = []; }
+}
+// 高画質なら、そのレンズで出せるいちばん大きいサイズを順に試す
+async function getCam(id) {
+  const base = id ? { deviceId: { exact: id } } : { facingMode: { ideal: 'environment' } };
+  const ladder = camCfg.hq
+    ? [{ width: { ideal: 4032 }, height: { ideal: 3024 } }, { width: { ideal: 3840 }, height: { ideal: 2160 } }, { width: { ideal: 1920 }, height: { ideal: 1440 } }, {}]
+    : [{ width: { ideal: 1920 }, height: { ideal: 1440 } }, {}];
+  let last;
+  for (const t of ladder) { try { return await navigator.mediaDevices.getUserMedia({ audio: false, video: { ...base, ...t } }); } catch (e) { last = e; } }
+  throw last;
+}
 async function startStream() {
-  camStream?.getTracks().forEach((t) => t.stop());
-  const hq = camCfg.hq;
-  const v = { width: { ideal: hq ? 4032 : 1920 }, height: { ideal: hq ? 3024 : 1440 } };
-  if (hq && camCfg.lens) v.deviceId = { exact: camCfg.lens }; else v.facingMode = { ideal: 'environment' };
-  try { camStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: v }); }
-  catch (e) { if (v.deviceId) { camCfg.lens = ''; saveCam(); return startStream(); } throw e; }
-  camTrack = camStream.getVideoTracks()[0];
-  const vid = $('#camVideo');
-  vid.srcObject = camStream;
-  try { await vid.play(); } catch {}
-  camZoom = 1; setZoom(1);
-  await drawHq();
+  if (camBusy) return; camBusy = true;
+  try {
+    // iPhoneは2つのカメラを同時に開けないので、先に止めてから開く
+    camStream?.getTracks().forEach((t) => t.stop()); camStream = null;
+    const vid = $('#camVideo'); vid.srcObject = null;
+    if (!lensTried) { lensTried = true; await listLenses(); if (!lenses.length) { const tmp = await getCam(''); tmp.getTracks().forEach((t) => t.stop()); await listLenses(); } } // カメラの名前は、一度カメラを許可したあとでないと分からない
+    let id = camCfg.lens && lenses.some((l) => l.id === camCfg.lens) ? camCfg.lens : '';
+    if (!id) id = (lenses.find((l) => l.kind[0] === 'auto') || lenses.find((l) => l.kind[0] === 'wide') || {}).id || ''; // 最初は「自動」（近くもピントが合う）
+    try { camStream = await getCam(id); } catch (e) { if (!id) throw e; camCfg.lens = ''; camStream = await getCam(''); }
+    camTrack = camStream.getVideoTracks()[0];
+    try { await camTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }); } catch {}
+    vid.srcObject = camStream;
+    try { await vid.play(); } catch {}
+    drawLens();
+  } finally { camBusy = false; }
 }
 async function openCamera(draftId) {
   camDraft = jobs.get(draftId);
@@ -1084,97 +1113,52 @@ async function openCamera(draftId) {
   document.body.style.overflow = 'hidden';
   drawAsp();
   drawCam();
-  requestAnimationFrame(placeCrop);
+  requestAnimationFrame(placeBox);
 }
-// 写真の形（スクエアなど）
+function drawLens() {
+  const set = camTrack?.getSettings?.() || {};
+  $('#lensRow').innerHTML = lenses.length > 1 ? lenses.map((l) => `<button class="${l.id === set.deviceId ? 'on' : ''}" data-lens="${esc(l.id)}">${l.kind[1]}</button>`).join('') : '';
+  const cur = lenses.find((l) => l.id === set.deviceId);
+  $('#camInfo').textContent = `${set.width && set.height ? Math.max(set.width, set.height) + '×' + Math.min(set.width, set.height) : ''}${cur?.kind[0] === 'auto' ? '　自動：近くは接写に切り替わります' : cur?.kind[0] === 'uw' ? '　超広角：近づいて接写できます' : ''}`;
+  setTimeout(placeBox, 200);
+}
+let lensWant = '';
+$('#lensRow').onclick = async (e) => {
+  const b = e.target.closest('[data-lens]'); if (!b) return;
+  lensWant = b.dataset.lens;
+  $('#lensRow').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  if (camBusy) return; // 切り替え中なら、終わってから最後に押したレンズへ
+  while (lensWant && lensWant !== (camTrack?.getSettings?.().deviceId || '')) {
+    camCfg.lens = lensWant; lensWant = ''; saveCam();
+    try { await startStream(); } catch { toast('このレンズは使えません'); camCfg.lens = ''; saveCam(); await startStream().catch(() => {}); }
+  }
+  lensWant = '';
+};
+// 写真の形（スクエアなど）：枠そのものをその形にして、中だけを映す（映っている範囲がそのまま写真になる）
 function drawAsp() {
   $('#camAsp').innerHTML = ASPECTS.map(([k, t]) => `<button class="cc ${camCfg.aspect === k ? 'on' : ''}" data-asp="${k}">${t}</button>`).join('');
   $('#camHq').classList.toggle('on', camCfg.hq);
-  $('#hqBar').hidden = !camCfg.hq;
 }
-$('#camAsp').onclick = (e) => { const b = e.target.closest('[data-asp]'); if (!b) return; camCfg.aspect = b.dataset.asp; saveCam(); drawAsp(); placeCrop(); };
+$('#camAsp').onclick = (e) => { const b = e.target.closest('[data-asp]'); if (!b) return; camCfg.aspect = b.dataset.asp; saveCam(); drawAsp(); placeBox(); };
 const aspRatio = () => (ASPECTS.find((a) => a[0] === camCfg.aspect) || ASPECTS[0])[2];
-// 画面に、撮れる範囲の枠を出す
-function placeCrop() {
-  const v = $('#camVideo'), box = $('#camVw'), cr = $('#camCrop');
-  if (!v.videoWidth || $('#camv').hidden) return;
-  const cw = box.clientWidth, ch = box.clientHeight, sc = Math.min(cw / v.videoWidth, ch / v.videoHeight);
-  const dw = v.videoWidth * sc, dh = v.videoHeight * sc;
-  let w = dw, h = dh;
-  const r = aspRatio();
-  if (r) { if (dw / dh > r) w = dh * r; else h = dw / r; }
-  Object.assign(cr.style, { width: w + 'px', height: h + 'px', left: (cw - w) / 2 + 'px', top: (ch - h) / 2 + 'px', display: r ? 'block' : 'none' });
+function placeBox() {
+  const v = $('#camVideo'), area = $('#camVw'), box = $('#camBox');
+  if ($('#camv').hidden) return;
+  const cw = area.clientWidth, ch = area.clientHeight - 16 - ($('#lensRow').children.length ? 52 : 0);
+  const r = aspRatio() || (v.videoWidth ? v.videoWidth / v.videoHeight : 3 / 4);
+  let w = cw, h = cw / r;
+  if (h > ch) { h = ch; w = ch * r; }
+  box.style.width = Math.floor(w) + 'px'; box.style.height = Math.floor(h) + 'px';
 }
-addEventListener('resize', () => setTimeout(placeCrop, 300));
-$('#camVideo').addEventListener('loadedmetadata', placeCrop);
-// 高画質モード（ズーム・レンズ・ピント・明るさ・ライト）
+addEventListener('resize', () => setTimeout(placeBox, 300));
+$('#camVideo').addEventListener('loadedmetadata', placeBox);
+// 高画質モード：大きいサイズで撮る（レンズごとの最大サイズ）
 $('#camHq').onclick = async () => {
+  if (camBusy) return;
   camCfg.hq = !camCfg.hq; saveCam(); drawAsp();
   try { await startStream(); } catch { toast('カメラを切り替えられませんでした'); }
-  setTimeout(placeCrop, 300);
-  toast(camCfg.hq ? '高画質モード：ズーム・レンズの切り替えなどが使えます' : '標準モードに戻しました', 1800);
+  toast(camCfg.hq ? '高画質：大きいサイズで撮影します' : '標準の画質に戻しました', 1800);
 };
-async function drawHq() {
-  if (!camCfg.hq) { hwZoom = null; return; }
-  const cap = camTrack?.getCapabilities?.() || {}, set = camTrack?.getSettings?.() || {};
-  // ズーム：カメラが対応していればカメラのズーム、なければ画像を拡大（デジタルズーム）
-  hwZoom = cap.zoom && cap.zoom.max > cap.zoom.min ? cap.zoom : null;
-  const zm = $('#zm');
-  zm.min = hwZoom ? hwZoom.min : 1; zm.max = hwZoom ? Math.min(hwZoom.max, 10) : 5; zm.step = 0.1;
-  zm.value = hwZoom ? set.zoom || hwZoom.min : 1;
-  $('#zmV').textContent = (+zm.value).toFixed(1) + '×';
-  // ピント
-  const fd = cap.focusDistance;
-  $('#focRow').hidden = !(fd && fd.max > fd.min && (cap.focusMode || []).includes('manual'));
-  if (!$('#focRow').hidden) { const f = $('#foc'); f.min = fd.min; f.max = fd.max; f.step = fd.step || (fd.max - fd.min) / 100; f.value = set.focusDistance ?? fd.min; }
-  // 明るさ
-  const ex = cap.exposureCompensation;
-  $('#expRow').hidden = !(ex && ex.max > ex.min);
-  if (!$('#expRow').hidden) { const x = $('#exp'); x.min = ex.min; x.max = ex.max; x.step = ex.step || 0.1; x.value = set.exposureCompensation ?? 0; }
-  $('#torch').hidden = !cap.torch;
-  $('#hqNote').textContent = `${set.width || ''}×${set.height || ''}${hwZoom ? '' : '・デジタルズーム'}${$('#focRow').hidden ? '・ピントは画面を2本指で広げて近づけるか、レンズを切り替えてください' : ''}`;
-  // レンズ（背面の広角・超広角・望遠など）
-  try {
-    const list = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput' && d.label && !/前面|front|facetime/i.test(d.label));
-    const cur = set.deviceId || camCfg.lens;
-    const nm = (l) => (/超広角|ultra/i.test(l) ? '超広角（接写）' : /望遠|tele/i.test(l) ? '望遠' : /トリプル|triple/i.test(l) ? 'トリプル' : /デュアル広角|dual wide/i.test(l) ? 'デュアル広角' : /デュアル|dual/i.test(l) ? 'デュアル' : /広角|wide|back|背面/i.test(l) ? '広角' : l.slice(0, 12));
-    $('#lensRow').innerHTML = list.length > 1 ? `<span class="hl">レンズ</span>` + list.map((d) => `<button class="cc ${d.deviceId === cur ? 'on' : ''}" data-lens="${esc(d.deviceId)}">${esc(nm(d.label))}</button>`).join('') : '';
-  } catch { $('#lensRow').innerHTML = ''; }
-}
-$('#lensRow').onclick = async (e) => {
-  const b = e.target.closest('[data-lens]'); if (!b) return;
-  camCfg.lens = b.dataset.lens; saveCam();
-  try { await startStream(); } catch { toast('このレンズは使えません'); camCfg.lens = ''; saveCam(); await startStream(); }
-  setTimeout(placeCrop, 300);
-};
-function setZoom(z) {
-  const v = $('#camVideo');
-  if (hwZoom) {
-    z = Math.max(hwZoom.min, Math.min(+$('#zm').max, z));
-    camTrack.applyConstraints({ advanced: [{ zoom: z }] }).catch(() => {});
-    v.style.transform = '';
-  } else {
-    z = Math.max(1, Math.min(5, z));
-    v.style.transform = z > 1 ? `scale(${z})` : '';
-  }
-  camZoom = z;
-  $('#zm').value = z; $('#zmV').textContent = z.toFixed(1) + '×';
-  const l = $('#camZmLbl'); l.textContent = z.toFixed(1) + '×'; l.hidden = z <= 1.01 && !hwZoom;
-}
-$('#zm').oninput = () => setZoom(+$('#zm').value);
-$('#foc').oninput = () => camTrack?.applyConstraints({ advanced: [{ focusMode: 'manual', focusDistance: +$('#foc').value }] }).catch(() => {});
-$('#focAuto').onclick = () => camTrack?.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
-$('#exp').oninput = () => camTrack?.applyConstraints({ advanced: [{ exposureCompensation: +$('#exp').value }] }).catch(() => {});
-let torchOn = false;
-$('#torch').onclick = () => { torchOn = !torchOn; camTrack?.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => toast('ライトを使えません')); $('#torch').classList.toggle('on', torchOn); };
-// 2本指で広げる・つまむとズーム（高画質モード）
-(() => {
-  let d0 = 0, z0 = 1;
-  const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-  $('#camVw').addEventListener('touchstart', (e) => { if (e.touches.length === 2 && camCfg.hq) { d0 = dist(e.touches); z0 = camZoom; } }, { passive: true });
-  $('#camVw').addEventListener('touchmove', (e) => { if (e.touches.length === 2 && d0 && camCfg.hq) { e.preventDefault(); setZoom(z0 * dist(e.touches) / d0); } }, { passive: false });
-  $('#camVw').addEventListener('touchend', () => (d0 = 0));
-})();
 function camTitle() { const i = draftList().findIndex((d) => d.id === camDraft?.id); return `商品 ${i + 1}`; }
 function drawCam() {
   const have = camDraft ? camDraft.images.length : 0;
@@ -1212,13 +1196,12 @@ $('#camShut').onclick = async () => {
   if (!v.videoWidth) return;
   if ((camDraft?.images.length || 0) + camShots.length >= 10) return toast('1つの商品の写真は10枚までです。「＋次の商品」で続けて撮れます');
   const f = $('#camFlash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
-  // デジタルズームの分と、写真の形（スクエアなど）の分を、真ん中から切り抜く
-  const dz = hwZoom ? 1 : camZoom;
-  let sw = v.videoWidth / dz, sh = v.videoHeight / dz;
+  // 写真の形（スクエアなど）に合わせて、真ん中から切り抜く（画面に映っている範囲と同じ）
+  let sw = v.videoWidth, sh = v.videoHeight;
   const r = aspRatio();
   if (r) { if (sw / sh > r) sw = sh * r; else sh = sw / r; }
   const sx = (v.videoWidth - sw) / 2, sy = (v.videoHeight - sh) / 2;
-  const M = camCfg.hq ? 2560 : 1600;
+  const M = camCfg.hq ? 4032 : 1600;
   const s = Math.min(1, M / Math.max(sw, sh));
   const c = document.createElement('canvas');
   c.width = Math.round(sw * s); c.height = Math.round(sh * s);
@@ -1239,7 +1222,7 @@ function closeCamera() {
   camStream?.getTracks().forEach((t) => t.stop());
   camStream = null;
   $('#camVideo').srcObject = null;
-  $('#camVideo').style.transform = ''; torchOn = false;
+
   $('#camv').hidden = true;
   document.body.style.overflow = '';
   renderDrafts();
