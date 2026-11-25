@@ -64,7 +64,7 @@ textarea{min-height:64px;resize:vertical}
 .prog{background:#f4f7fc;border-radius:12px;padding:14px;margin:10px 0;white-space:pre-wrap;line-height:1.6}
 .prog.err{background:#fdf0ef;color:#a2231b}
 .pin{font-size:40px;font-weight:700;letter-spacing:.2em;text-align:center;margin:10px 0;font-family:ui-monospace,Menlo,monospace}
-.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#323232;color:#fff;padding:10px 16px;border-radius:12px;z-index:30;max-width:90vw;font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#323232;color:#fff;padding:10px 16px;border-radius:12px;z-index:30;max-width:90vw;font-size:14px}
 .code{font-family:ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid #9ab8ea;border-top-color:#1a73e8;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -116,6 +116,13 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
 .draft.cur{border-color:#1a73e8;box-shadow:0 0 0 1px #1a73e8 inset}
 .draft .curtag{font-size:11px;color:#1a73e8;font-weight:600}
 .delx{background:none;color:#c5221f;font-size:13px;font-weight:600;padding:4px 8px;border:1px solid #f1c4c0;border-radius:8px}
+.camv .go{background:#1a73e8;font-weight:700}
+.camv .crow{display:flex;gap:6px;overflow-x:auto;margin-bottom:6px;scrollbar-width:none}
+.camv .crow::-webkit-scrollbar{display:none}
+.camv .cc{flex:none;font-size:12px;padding:6px 10px;border-radius:14px;background:rgba(255,255,255,.16);color:#fff;font-weight:500}
+.camv .cc.on{background:#fff;color:#1a73e8;font-weight:700}
+.sbar .ship{flex:0 0 32%;background:#fff;color:#d93025;border:2px solid #d93025;font-weight:700}
+.sbar .ship.on{background:#7f1d1d;border-color:#7f1d1d;color:#fff}
 </style>
 </head>
 <body>
@@ -176,7 +183,7 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
 <div id="sheet" class="sheet" hidden>
   <div class="bar"><button id="back" class="ghost sm">‹ 戻る</button><span class="sp"></span><span id="sheetBtns"></span></div>
   <div class="body" id="sheetBody"></div>
-  <div class="bbar sbar"><button id="back2" class="ghost">‹ 戻る</button><button id="sheetBuy" class="red">買取価格を表示</button></div>
+  <div class="bbar sbar"><button id="shipTgl" class="ship">送料込み</button><button id="sheetBuy" class="red">買取価格を表示</button></div>
 </div>
 
 <!-- 買取価格の計算 -->
@@ -213,16 +220,17 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
 </div>
 <!-- 連続撮影 -->
 <div id="camv" class="camv" hidden>
-  <div class="ct"><button id="camClose" class="cbtn" style="padding:8px 12px">✕ やめる</button><span class="sp"></span><b id="camTitle"></b><span class="sp"></span><span id="camCount" style="min-width:60px;text-align:right"></span></div>
+  <div class="ct"><button id="camClose" class="cbtn" style="padding:8px 12px">✕ やめる</button><span class="sp"></span><b id="camTitle"></b><span id="camCount" style="font-size:13px;opacity:.85"></span><span class="sp"></span><button id="camNext" class="cbtn" style="padding:8px 10px;font-size:13px">＋次の商品</button></div>
   <div style="position:relative;flex:1;min-height:0;display:flex"><video id="camVideo" playsinline muted autoplay></video><div id="camFlash" class="flash"></div></div>
   <div class="cb">
+    <div id="camChips"></div>
     <div id="camStrip" class="strip"></div>
     <div class="row3">
-      <button id="camNext" class="cbtn">次の商品へ ›</button>
+      <button id="camGo" class="cbtn go">査定する</button>
       <button id="camShut" class="shut" aria-label="撮影"></button>
       <button id="camDone" class="cbtn done">完了</button>
     </div>
-    <p class="cmsg">続けてシャッターを押すと、何枚でも撮れます（1商品10枚まで）</p>
+    <p class="cmsg">続けてシャッターを押すと、何枚でも撮れます（1商品10枚まで）。「＋次の商品」でそのまま次の商品へ</p>
   </div>
 </div>
 <input type="file" id="cam" accept="image/*" capture="environment" hidden>
@@ -336,6 +344,8 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
   // 発送サイズ
   const SIZES = [['neko', 'ネコポス'], ['compact', '宅急便コンパクト'], ['s60', '60サイズ'], ['s80', '80サイズ'], ['s100', '100サイズ'], ['s120', '120サイズ'], ['s140', '140サイズ'], ['s160', '160サイズ'], ['s180', '180サイズ'], ['s200', '200サイズ']];
   const SIZE_NAME = Object.fromEntries(SIZES);
+  const CONDS = [['', '状態：未選択'], ['new', '新品・未使用'], ['used10', '未使用に近い'], ['used20', '目立った傷なし'], ['used40', 'やや傷あり'], ['used60', '傷あり'], ['used80', '状態が悪い']];
+  const WORKS = [['', '動作：未選択'], ['ok', '動作確認済み'], ['power', '通電のみ'], ['unk', '動作未確認'], ['junk', 'ジャンク']];
   const PLAT = { mercari: 'メルカリ', yahoo: 'ヤフオク' };
   const SHIP_NAME = { mercari: 'らくらくメルカリ便', yahoo: 'おてがる配送（ヤマト）' };
   // 初期値：2026年11月時点の公式料金（全国一律・出品者負担）。宅急便コンパクトは専用BOX 70円を含む
@@ -454,7 +464,7 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
     if (p.brand) h += `<span class="sv-tag b">${esc(p.brand)}</span>`;
     if (p.model) h += `<span class="sv-tag">型番 ${esc(p.model)}</span>`;
     if (p.confidence) h += `<span class="sv-tag ${confCls}">特定の確かさ：${esc(p.confidence)}</span>`;
-    if (c.label) h += `<span class="sv-tag o">${esc(c.label)}</span>`;
+    if (c.label) h += `<span class="sv-tag o">${esc(c.label)}${c.byUser ? '（選択）' : ''}</span>`;
     h += '</div></div>';
 
     // おすすめ価格
@@ -665,10 +675,11 @@ body{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
   // 一覧用の短い要約
   function summary(r) {
     const rec = r?.final?.recommend || {};
-    return { name: r?.product?.name || '', price: rec.price || 0, cond: r?.condition?.label || '' };
+    const add = CFG.basis === 'incl' ? shipYen(CFG.inclVia, r?.ship?.size) : 0; // 一覧の価格も「送料込み／送料別」の設定に合わせる
+    return { name: r?.product?.name || '', price: rec.price ? rec.price + add : 0, cond: r?.condition?.label || '' };
   }
 
-  (typeof window !== 'undefined' ? window : globalThis).SateiView = { COND, esc, yen, render, summary, fmtDate, dur, SIZES, SIZE_NAME, PLAT, DEF_COST, mergeCfg, setCfg, sizeKey, shipYen, calcBuy, openBuy, getCfg: () => CFG };
+  (typeof window !== 'undefined' ? window : globalThis).SateiView = { COND, CONDS, WORKS, esc, yen, render, summary, fmtDate, dur, SIZES, SIZE_NAME, PLAT, DEF_COST, mergeCfg, setCfg, sizeKey, shipYen, calcBuy, openBuy, getCfg: () => CFG };
 })();
 </script>
 <script>
@@ -771,6 +782,21 @@ async function onData(d) {
     case 'missing': { const j = jobs.get(d.id); if (j && j.state !== 'done') { j.state = 'unsent'; save(j); flush(); } break; }
     case 'status': { const j = jobs.get(d.id); if (j && j.state !== 'done') { j.state = d.stage === 'wait' ? 'wait' : 'run'; j.msg = String(d.msg || ''); save(j, true); } break; }
     case 'result': { const j = jobs.get(d.id); if (j) { const first = j.state !== 'done'; j.state = 'done'; j.result = d.result; j.error = ''; j.isNew = first || j.isNew; if (first || !j.doneAt) j.doneAt = +d.doneAt || Date.now(); save(j); if (first) toast('査定結果が届きました：' + (d.result?.product?.name || '')); } break; }
+    case 'share': {
+      // PCから送られてきた査定結果（ほかの端末やPCで査定したものも含む）
+      if (typeof d.id !== 'string' || !d.result) break;
+      let j = jobs.get(d.id);
+      if (j && j.state === 'draft') break;
+      if (!j) {
+        const imgs = (Array.isArray(d.imgs) ? d.imgs : []).slice(0, 10).map((x) => new Blob([x.data], { type: /^image\//.test(x.mime) ? x.mime : 'image/jpeg' }));
+        j = { id: d.id, at: +d.at || Date.now(), note: String(d.note || ''), work: String(d.work || ''), cond: String(d.cond || ''), mode: d.mode === 'ai' ? 'ai' : 'full', images: imgs, thumb: String(d.thumb || '') };
+      }
+      Object.assign(j, { state: 'done', result: d.result, error: '', doneAt: +d.doneAt || Date.now(), isNew: true, shared: true });
+      await save(j);
+      clearTimeout(onData.shTm); onData.shN = (onData.shN || 0) + 1;
+      onData.shTm = setTimeout(() => { toast(`PCから査定結果が${onData.shN}件届きました`); onData.shN = 0; }, 600);
+      break;
+    }
     case 'error': { const j = jobs.get(d.id); if (j) { if (j.state !== 'err' || !j.doneAt) j.doneAt = +d.doneAt || Date.now(); j.state = 'err'; j.error = String(d.msg || 'エラー'); save(j); } break; }
   }
 }
@@ -785,7 +811,7 @@ async function flush() {
       if (j.state !== 'unsent') continue;
       if (!ok || !conn?.open) break;
       j.state = 'sending'; j.msg = 'PCへ送信中…'; render();
-      conn.send({ t: 'jobStart', id: j.id, n: j.images.length, note: j.note, work: j.work, mode: j.mode || 'full', at: j.at });
+      conn.send({ t: 'jobStart', id: j.id, n: j.images.length, note: j.note, work: j.work, cond: j.cond || '', mode: j.mode || 'full', at: j.at });
       for (let i = 0; i < j.images.length; i++) conn.send({ t: 'jobImg', id: j.id, i, mime: j.images[i].type || 'image/jpeg', data: await j.images[i].arrayBuffer() });
       conn.send({ t: 'jobEnd', id: j.id });
       await save(j);
@@ -832,7 +858,7 @@ async function thumb(blob) {
 }
 
 // ---------------- 新しく査定（下書き：商品ごとの枠。撮影でページが読み直されても消えないよう保存） ----------------
-const WORKS = [['', '動作：未選択'], ['ok', '動作確認済み'], ['power', '通電のみ'], ['unk', '動作未確認'], ['junk', 'ジャンク']];
+const { WORKS, CONDS } = SateiView;
 const draftList = () => [...jobs.values()].filter((j) => j.state === 'draft').sort((a, b) => a.at - b.at);
 async function newDraft() { const d = { id: 'j-' + Date.now().toString(36) + '-' + rid(6), at: Date.now(), state: 'draft', images: [], work: '', note: '' }; jobs.set(d.id, d); await db.put(d); return d; }
 let pickFor = '';
@@ -857,6 +883,7 @@ function renderDrafts() {
     <div class="dt"><b>商品 ${i + 1}</b><span class="hint" style="margin:0">${d.images.length ? `写真${d.images.length}枚` : ''}</span>${list.length > 1 && d === cur ? '<span class="curtag">📷 撮影・写真はここに追加</span>' : ''}<span class="sp"></span>
       ${list.length > 1 || d.images.length ? `<button class="ghost sm danger" data-rm="${d.id}">削除</button>` : ''}</div>
     ${d.images.length ? `<div class="pics">${d.images.map((b, k) => `<div class="p"><img src="${durl(b)}" alt=""><button class="x" data-x="${d.id}:${k}">×</button></div>`).join('')}</div>` : '<p class="hint">下の「📷 撮影」で撮るか「🖼 写真」で選びます。商品全体・ロゴ・型番・タグ・傷のある所など、いろいろな角度から撮ると正確になります（10枚まで）。</p>'}
+    <div class="chips">${CONDS.map(([k, t]) => `<span class="chip ${(d.cond || '') === k ? 'on' : ''}" data-c="${d.id}:${k}">${t}</span>`).join('')}</div>
     <div class="chips">${WORKS.map(([k, t]) => `<span class="chip ${d.work === k ? 'on' : ''}" data-w="${d.id}:${k}">${t}</span>`).join('')}</div>
     <textarea data-note="${d.id}" placeholder="メモ（任意）：付属品あり・購入時期・気になる点 など">${esc(d.note)}</textarea>
   </div>`).join('');
@@ -866,7 +893,7 @@ function renderDrafts() {
   $('#send').textContent = n > 1 ? `${n}件をまとめて査定する` : '査定する';
 }
 $('#drafts').addEventListener('click', async (e) => {
-  const t = e.target.closest('[data-cam],[data-lib],[data-x],[data-w],[data-rm]');
+  const t = e.target.closest('[data-cam],[data-lib],[data-x],[data-w],[data-c],[data-rm]');
   // 商品の枠を押したら、そこを撮影・写真の追加先にする
   const card = e.target.closest('.draft');
   if (card && card.dataset.d !== curDraftId && !e.target.closest('textarea')) { curDraftId = card.dataset.d; if (!t) { renderDrafts(); return; } }
@@ -875,6 +902,7 @@ $('#drafts').addEventListener('click', async (e) => {
   if (t.dataset.lib) { pickFor = t.dataset.lib; $('#lib').click(); return; }
   if (t.dataset.x) { const [id, k] = t.dataset.x.split(':'); const d = jobs.get(id); d.images.splice(+k, 1); await db.put(d); renderDrafts(); return; }
   if (t.dataset.w) { const [id, k] = t.dataset.w.split(':'); const d = jobs.get(id); d.work = k; await db.put(d); renderDrafts(); return; }
+  if (t.dataset.c !== undefined) { const [id, k] = t.dataset.c.split(':'); const d = jobs.get(id); d.cond = k; await db.put(d); renderDrafts(); return; }
   if (t.dataset.rm) {
     const d = jobs.get(t.dataset.rm);
     if (d.images.length && !confirm('この商品の枠を削除しますか？')) return;
@@ -948,7 +976,26 @@ function drawCam() {
   $('#camStrip').scrollLeft = 1e6;
   $('#camShut').disabled = have + camShots.length >= 10;
   $('#camDone').textContent = camShots.length ? `完了（${camShots.length}枚）` : '完了';
+  // 状態・動作もカメラの画面で選べる（今撮っている商品に入る）
+  const cd = camDraft || {};
+  $('#camChips').innerHTML = `<div class="crow">${CONDS.map(([k, t]) => `<button class="cc ${(cd.cond || '') === k ? 'on' : ''}" data-cc="${k}">${t}</button>`).join('')}</div>
+    <div class="crow">${WORKS.map(([k, t]) => `<button class="cc ${(cd.work || '') === k ? 'on' : ''}" data-cw="${k}">${t}</button>`).join('')}</div>`;
 }
+$('#camChips').onclick = async (e) => {
+  const b = e.target.closest('[data-cc],[data-cw]');
+  if (!b || !camDraft) return;
+  if (camDraft.state !== 'draft') camDraft = draftList()[0] || (await newDraft());
+  if (b.dataset.cc !== undefined) camDraft.cond = b.dataset.cc; else camDraft.work = b.dataset.cw;
+  await db.put(camDraft);
+  drawCam();
+};
+// 撮った写真を入れて、そのまま査定へ
+$('#camGo').onclick = async () => {
+  await saveShots();
+  closeCamera();
+  if (!draftList().some((d) => d.images.length)) return toast('写真がありません');
+  $('#send').click();
+};
 $('#camStrip').onclick = (e) => { const b = e.target.closest('.x'); if (!b) return; const s = camShots.splice(+b.dataset.i, 1)[0]; URL.revokeObjectURL(camUrls.get(s)); camUrls.delete(s); drawCam(); };
 $('#camShut').onclick = async () => {
   const v = $('#camVideo');
@@ -982,6 +1029,7 @@ function closeCamera() {
 $('#camDone').onclick = async () => { await saveShots(); closeCamera(); };
 $('#camNext').onclick = async () => {
   if (!camShots.length && !camDraft?.images.length) return toast('まず、この商品を撮影してください');
+  curDraftId = '';
   await saveShots();
   camDraft = await newDraft();
   drawCam();
@@ -1057,7 +1105,9 @@ function updDel() {
 }
 $('#allSel').onclick = () => { const all = [...$('#jobs').querySelectorAll('input[type=checkbox]')]; const on = !all.every((i) => i.checked); all.forEach((i) => { i.checked = on; i.closest('.job').classList.toggle('on', on); }); updDel(); };
 $('#redoSel').onclick = () => {
-  const list = [...$('#jobs').querySelectorAll('input:checked')].map((i) => jobs.get(i.dataset.id)).filter((j) => j && (j.state === 'done' || j.state === 'err'));
+  const all = [...$('#jobs').querySelectorAll('input:checked')].map((i) => jobs.get(i.dataset.id)).filter((j) => j && (j.state === 'done' || j.state === 'err'));
+  const list = all.filter((j) => !j.shared); // PCから送られてきた結果は、PCで再査定する
+  if (all.length && !list.length) return toast('PCから送られてきた結果は、PCで再査定してください');
   if (!list.length) return;
   if (!ok) return toast('PCにつながっていません');
   if (!confirm(`チェックした${list.length}件をもう一度査定しますか？\n（今の査定結果は、新しい結果に置き換わります）`)) return;
@@ -1103,16 +1153,18 @@ function renderSheet(fresh) {
   if (!j || j.state === 'draft') return closeSheet();
   if (fresh || sheetUrls.length !== j.images.length) { sheetUrls.forEach(URL.revokeObjectURL); sheetUrls = j.images.map((b) => URL.createObjectURL(b)); }
   let h = `<div class="imgs">${sheetUrls.map((u) => `<img src="${u}" alt="">`).join('')}</div>`;
-  if (j.work || j.note) h += `<p class="hint" style="font-size:13px;color:#444">${j.work ? `<b>${esc(WL[j.work] || '')}</b>　` : ''}${esc(j.note || '')}</p>`;
+  if (j.work || j.note || j.cond) h += `<p class="hint" style="font-size:13px;color:#444">${j.cond ? `<b>${esc(SateiView.COND.find((c) => c[0] === j.cond)?.[1] || '')}</b>　` : ''}${j.work ? `<b>${esc(WL[j.work] || '')}</b>　` : ''}${esc(j.note || '')}</p>`;
   if (j.state === 'done') h += SateiView.render(j.result);
   else if (j.state === 'err') h += `<div class="prog err">${esc(j.error)}</div>`;
   else h += `<div class="prog"><span class="spin"></span>${esc(j.state === 'unsent' ? 'PCにつながったら送ります' : j.msg || '査定待ち')}\n\n${j.mode === 'ai' ? 'PCのAIが画像から商品と価格を調べています。' : 'PCのAIが画像を調べ、ヤフオク・メルカリの売れた価格を集めています。'}1件あたり1〜3分ほどかかります。この画面を閉じても、次に開いたときに結果が届きます。</div>`;
   $('#sheetBody').innerHTML = h;
   let b = '';
   if (['run', 'wait', 'sending'].includes(j.state)) b += '<button class="ghost sm danger" id="sCancel">取り消し</button>';
-  if (j.state === 'done' || j.state === 'err') b += `<button class="ghost sm" id="sRedo">もう一度査定</button>`;
+  if ((j.state === 'done' || j.state === 'err') && !j.shared) b += `<button class="ghost sm" id="sRedo">もう一度査定</button>`;
   $('#sheetBtns').innerHTML = b;
   $('#sheetBuy').hidden = j.state !== 'done';
+  $('#shipTgl').hidden = j.state !== 'done';
+  drawShipTgl();
   $('#sCancel') && ($('#sCancel').onclick = () => { if (!ok) return toast('PCにつながっていません'); conn.send({ t: 'cancel', id: j.id }); toast('取り消しを送りました'); });
   $('#sRedo') && ($('#sRedo').onclick = () => {
     if (!ok) return toast('PCにつながっていません');
@@ -1122,7 +1174,15 @@ function renderSheet(fresh) {
 }
 function closeSheet() { openId = ''; $('#sheet').hidden = true; document.body.style.overflow = ''; sheetUrls.forEach(URL.revokeObjectURL); sheetUrls = []; }
 $('#back').onclick = closeSheet;
-$('#back2').onclick = closeSheet;
+// 送料込み／送料別の表示を切り替える（PCにも伝わる）
+function drawShipTgl() { const on = SateiView.getCfg().basis === 'incl'; $('#shipTgl').classList.toggle('on', on); $('#shipTgl').textContent = on ? '送料込み ✓' : '送料込み'; }
+$('#shipTgl').onclick = () => {
+  const c = ls.get('as_cfg') || {};
+  c.basis = SateiView.getCfg().basis === 'incl' ? 'excl' : 'incl';
+  ls.set('as_cfg', c); applyCfg(); drawShipTgl();
+  if (ok) try { conn.send({ t: 'cfgSet', basis: c.basis }); } catch {}
+  toast(c.basis === 'incl' ? '送料込みの価格で表示しています' : '送料別の価格で表示しています', 1800);
+};
 $('#sheetBuy').onclick = () => { const j = jobs.get(openId); if (j?.state === 'done') openBuyFor([j]); };
 $('#openSet').onclick = () => { $('#setSheet').hidden = false; document.body.style.overflow = 'hidden'; };
 $('#closeSet').onclick = () => { $('#setSheet').hidden = true; document.body.style.overflow = ''; };
@@ -1134,6 +1194,7 @@ function applyCfg() {
   const c = SateiView.getCfg();
   $('#basisSel').value = c.basis;
   $('#costInfo').textContent = `買取計算：手数料 メルカリ${c.fee.mercari}%・ヤフオク${c.fee.yahoo}%／梱包・経費 1点${(+c.pack || 0) + (+c.other || 0)}円／目標利益 ${c.profitMode === 'yen' ? `1点${c.profitYen}円` : `${c.profitRate}%（最低${c.minProfit}円）`}。送料表などの細かい設定はPCの「⚙ 設定」で変更します。`;
+  render();
   if (openId) renderSheet();
 }
 $('#basisSel').onchange = () => {
