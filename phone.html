@@ -498,7 +498,8 @@ async function queueOut(list,opts){
 }
 async function sendFiles(files){
   if(!files.length)return;
-  const list=[];for(const f of files){list.push({kind:'file',blob:f,name:f.name||'file',mime:f.type||'application/octet-stream',size:f.size})}
+  /* iPhoneのSafariは、選んだファイルをそのまま保存すると後で読めなくなる（?表示になる）ため、中身をコピーしてから保存する */
+  const list=[];for(const f of files){let blob=f;try{blob=new Blob([await f.arrayBuffer()],{type:f.type||'application/octet-stream'})}catch(e){}list.push({kind:'file',blob,name:f.name||'file',mime:f.type||'application/octet-stream',size:blob.size})}
   queueOut(list);
 }
 function sendText(){const t=$('#txt').value;if(!t.trim())return;$('#txt').value='';autoH();queueOut([{kind:'text',text:t}])}
